@@ -9,6 +9,7 @@ Rails.application.routes.draw do
   get "echo", to: "pages#echo"
   get "keys", to: "pages#keys"
   get "framed", to: "pages#framed"
+  post "framed", to: "pages#save_step"
   get "styled", to: "pages#styled"
   put "body", to: "pages#body"
   resources :uploads, only: %i[new create]

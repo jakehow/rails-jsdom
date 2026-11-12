@@ -138,13 +138,13 @@ module RailsJsdom
       assert_equal [ { status: 201, headers: { "content-type" => "text/html" }, body: "<p>Saved</p>", url: "http://www.example.com/items", redirected: false } ], replies
     end
 
-    test "#click follows a fetch's redirects with its Accept header" do
-      bridge_answering(FETCH)
+    test "#click follows a fetch's redirects with its headers except the ones that describe its body" do
+      bridge_answering(FETCH.merge("headers" => FETCH.fetch("headers").merge("turbo-frame" => "panel")))
       @helper.stubs(:host).returns("www.example.com")
       @helper.stubs(:process)
       @helper.stubs(:response).returns(stub(redirect?: true), stub(redirect?: false, status: 200, headers: {}, body: ""))
       @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/items/1"))
-      @helper.expects(:follow_redirect!).with(headers: { "accept" => "text/html" }).once
+      @helper.expects(:follow_redirect!).with(headers: { "accept" => "text/html", "turbo-frame" => "panel" }).once
 
       @helper.click("Save")
     end

@@ -2,5 +2,7 @@
 <p id="outside">Outside <%= params.fetch(:step, 1) %></p>
 <turbo-frame id="panel">
   <p id="step">Step <%= params.fetch(:step, 1) %></p>
+  <%= tag.p "Rendered for the frame", id: "frame-request" if turbo_frame_request? %>
   <%= link_to "Next step", framed_path(step: 2) %>
+  <%= button_to "Save step", framed_path %>
 </turbo-frame>

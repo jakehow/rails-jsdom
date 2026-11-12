@@ -67,6 +67,14 @@ class PageInteractionTest < RailsJsdom::TestCase
     RailsJsdom.command_timeout = nil
   end
 
+  test "a form in a Turbo Frame that redirects after saving is still a frame request" do
+    visit framed_path
+    click_on "Save step"
+
+    assert_selector "#step", text: "Step 3"
+    assert_selector "#frame-request"
+  end
+
   test "a page fetch reaches Rails in the test's session" do
     visit login_path
     fill_in "Your name", with: "Ada"

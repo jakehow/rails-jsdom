@@ -829,7 +829,7 @@ module RailsJsdom
 
     def rails_jsdom_request(method, path, headers:, params: nil)
       process(method.downcase.to_sym, path, params: params, headers: headers)
-      rails_jsdom_follow_redirects(headers.slice("accept"), false)
+      rails_jsdom_follow_redirects(headers.except("content-type", "content-encoding", "content-language", "content-location"), false)
     end
 
     def rails_jsdom_follow_redirects(headers, redirected)
