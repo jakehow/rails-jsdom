@@ -2,6 +2,7 @@
 
 const { test, before, beforeEach } = require("node:test")
 const assert = require("node:assert/strict")
+const { JSDOM, VirtualConsole } = require("jsdom")
 const { HOST, bodyText, connect, html, prepare, clear } = require("./support")
 
 const runner = connect()
@@ -107,6 +108,45 @@ test("CSS.escape serialises identifiers as browsers do", async () => {
   const result = await runner.evaluate(`["1a-b c", "-2", "-", "\\0\\u0001\u00e9_x"].map(value => CSS.escape(value))`)
 
   assert.deepEqual(result, ["\\31 a-b\\ c", "-\\32 ", "\\-", "\uFFFD\\1 \u00e9_x"])
+})
+
+test("jsdom still lacks the browser APIs the runtime adds", () => {
+  const { window } = new JSDOM("<dialog></dialog>")
+  const dialog = window.document.querySelector("dialog")
+  const missing = {
+    CSS: window.CSS,
+    matchMedia: window.matchMedia,
+    IntersectionObserver: window.IntersectionObserver,
+    ResizeObserver: window.ResizeObserver,
+    clipboard: window.navigator.clipboard,
+    scrollIntoView: window.Element.prototype.scrollIntoView,
+    show: dialog.show,
+    showModal: dialog.showModal,
+    close: dialog.close,
+    Request: window.Request,
+    Response: window.Response
+  }
+
+  assert.deepEqual(Object.keys(missing).filter(name => missing[name] !== undefined), [])
+})
+
+test("jsdom's own scrolling methods report that they are not implemented", () => {
+  const errors = []
+  const virtualConsole = new VirtualConsole()
+  virtualConsole.on("jsdomError", error => errors.push(error.message))
+  const { window } = new JSDOM("", { virtualConsole })
+  window.scrollTo(0, 0)
+  window.scroll(0, 0)
+  window.scrollBy(0, 0)
+
+  assert.deepEqual(errors, ["Not implemented: Window's scrollTo() method", "Not implemented: Window's scroll() method", "Not implemented: Window's scrollBy() method"])
+})
+
+test("Request and Response headers are instances of the page's Headers", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`[new Request("${HOST}/x").headers instanceof Headers, new Response("x").headers instanceof Headers]`)
+
+  assert.deepEqual(result, [true, true])
 })
 
 test("timers run in order of time, then of scheduling, up to the horizon", async () => {
