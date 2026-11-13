@@ -26,6 +26,7 @@ end
 
 - [How it works](#how-it-works)
 - [Trade-offs compared with system tests](#trade-offs-compared-with-system-tests)
+- [Results on 37signals' open-source apps](#results-on-37signals-open-source-apps)
 - [Requirements](#requirements)
 - [Installation](#installation)
   - [Supply chain](#supply-chain)
@@ -43,19 +44,19 @@ end
 ## How it works
 
 1. Each test worker starts **one persistent Node process** running jsdom. It stays up for the whole run.
-2. On start, Node bundles your importmap's `application` module and every Stimulus controller under `app/javascript/controllers` once with [esbuild](https://esbuild.github.io), resolving `@hotwired/turbo-rails`, `@hotwired/stimulus` and your other pins through your app's importmap and Propshaft load path. The versions under test are exactly the ones your app ships.
-3. `visit` makes a real integration request (`get`), follows redirects, and loads the response HTML into a fresh jsdom window at the URL it requested last: the visited URL, or the target of the last redirect. Middleware that rewrites the path, such as one that moves a prefix into `SCRIPT_NAME`, does not change it. Your `application` module runs, as `javascript_importmap_tags` runs it in a browser, so its initializers and globals are there; Turbo and Stimulus boot; controllers connect. Controllers connect as they do with `stimulus-loading` in a browser: after the page's scripts have run, one per task, in the order of their files. Work your modules queued with `setTimeout`, such as defining custom elements, comes first. `@hotwired/stimulus-loading` is replaced: the runner registers each controller when the page first uses it.
+2. On start, Node bundles your importmap's `application` module and every Stimulus controller under `app/javascript/controllers` once with [esbuild](https://esbuild.github.io), resolving `@hotwired/turbo-rails`, `@hotwired/stimulus` and your other pins through your app's importmap and Propshaft load path. The versions under test are exactly the ones your app ships. A dynamic `import()` of a module your importmap does not pin is left out of the bundle and fails when the page runs it, as it would in a browser.
+3. `visit` makes a real integration request (`get`), follows redirects, and loads the response HTML into a fresh jsdom window at the URL it requested last: the visited URL, or the target of the last redirect. Middleware that rewrites the path, such as one that moves a prefix into `SCRIPT_NAME`, does not change it. Your `application` module runs, as `javascript_importmap_tags` runs it in a browser, so its initializers and globals are there; Turbo and Stimulus boot; controllers connect. If your `application` module starts Stimulus and sets `window.Stimulus`, controllers register on that application; otherwise the runner starts one. Controllers connect as they do with `stimulus-loading` in a browser: after the page's scripts have run, one per task, in the order of their files. Work your modules queued with `setTimeout`, such as defining custom elements, comes first. `@hotwired/stimulus-loading` is replaced: the runner registers each controller when the page first uses it.
 4. Every `fetch` and `XMLHttpRequest` the page makes — your controllers' own calls, Active Storage direct uploads, Turbo Drive visits, Turbo form submissions, Turbo Frames — is sent back to Ruby and answered by Rails **in-process**, with the test's cookies and session, following redirects. Turbo then renders the response exactly as it would in a browser, including Turbo Stream responses.
-5. After every action, the runner **settles** the page deterministically: it runs timers on a virtual clock and waits until no Rails request is pending.
+5. After every action, the runner **settles** the page deterministically: it runs timers on a virtual clock, delivers what Action Cable sent the page, and waits until no Rails request is pending. See [Action Cable and Turbo Stream broadcasts](#action-cable-and-turbo-stream-broadcasts) and [Timers and settling](#timers-and-settling).
 6. Assertions read a snapshot of the live DOM: `assert_dom`, `assert_select` and `css_select` work as in any Rails test because `document_root_element` is the page.
-7. JavaScript errors, unhandled promise rejections, Stimulus errors and unexpected alert, confirm or prompt dialogs fail the action that caused them. A stylesheet that jsdom cannot parse does not: browsers skip CSS they cannot parse, and jsdom does not parse some valid CSS, such as nested rules.
+7. JavaScript errors, unhandled promise rejections, Stimulus errors and unexpected alert, confirm or prompt dialogs fail the action that caused them. A stylesheet that jsdom cannot parse does not: browsers skip CSS they cannot parse, and jsdom does not parse all valid CSS.
 
 ## Trade-offs compared with system tests
 
 **What you gain**
 
-- **Speed.** No browser, no Capybara server, no Puma, no Chrome. A test is a Rails request plus a jsdom page. As much as 4–10x faster than the same behaviour in system tests.
-- **Determinism.** Timers run on a virtual clock and the runner waits for pending requests itself. There are no sleeps, waits or retries to tune.
+- **Speed.** No browser, no Capybara server, no Puma, no Chrome. A test is a Rails request plus a jsdom page. In [37signals' open-source apps](#results-on-37signals-open-source-apps), the same tests ran about 2x to 15x faster than as system tests.
+- **Determinism.** Timers run on a virtual clock that Ruby and the page share, Action Cable runs in the test's thread, and the runner waits for pending requests itself. There are no sleeps, waits or retries to tune, and a slow machine does not change what a test sees.
 - **Real code paths.** Real controllers, real views, real Stimulus controllers, real Turbo, real session — only the browser engine is replaced.
 - **Clear failures.** A JavaScript exception, an unhandled rejection or a dialog you did not expect fails the test instead of being swallowed by the browser.
 - **Parallel-friendly.** Each test worker gets its own Node process; nothing is shared between workers.
@@ -90,6 +91,68 @@ These are limits of this library, not of jsdom, and could be added:
 **Where the time goes**
 
 The esbuild bundle is built once per test worker. Each `visit` then costs a Rails render, a jsdom parse and a Turbo/Stimulus boot, and each interaction costs whatever Rails requests it makes. If several tests repeat the same visit and interactions only to check different things about the result, each one pays for them again; checking those things in one test pays once.
+
+## Results on 37signals' open-source apps
+
+To test rails-jsdom on real apps, we moved the system tests of three open-source Rails apps from 37signals to interaction tests wherever possible: [Campfire](https://github.com/basecamp/once-campfire), [Fizzy](https://github.com/basecamp/fizzy) and [Writebook](https://github.com/basecamp/writebook). The work is on the `interaction-tests` branch of each fork: [once-campfire](https://github.com/jakehow/once-campfire/tree/interaction-tests), [fizzy](https://github.com/jakehow/fizzy/tree/interaction-tests) and [writebook](https://github.com/jakehow/writebook/tree/interaction-tests). The upstream apps still use their system tests.
+
+| App | System tests | Moved to interaction tests | Still system tests | System tests (Chrome) | Interaction tests |
+|---|---|---|---|---|---|
+| Campfire | 30 | 28 | 3 | 302s for 26 of the 28 | 19–25s for all 28 |
+| Fizzy | 47 | 18 | 29 | 21.5s | 9.6–9.9s |
+| Writebook | 3 | 3 | 0 | 6.9s | 3.7s |
+
+How we measured:
+
+- The two columns of times are for the same tests, the system test from the app's `main` branch against the interaction test that replaced it.
+- All runs used one process (`PARALLEL_WORKERS=1`) on one Apple M1 Max.
+- System tests ran in headless Chrome through Selenium, as each app configures them.
+- Interaction tests ran on Node 26.13.1, jsdom 31.0.0 and Rails 8.2.0.alpha, the edge Rails the apps use.
+- A range shows the lowest and highest of three runs.
+- The interaction times include starting Node and bundling the app's JavaScript once, about 1.4s.
+- Campfire's system time covers 26 tests. The other 2 moved later, with `stub_layout`, so they are in the interaction time only.
+
+Why the gains differ:
+
+- Campfire's system tests spend most of their time waiting in the browser, about 11.6s per test. Interaction tests do not wait.
+- Fizzy's system tests were already fast, about 1.1s per test, with no waiting. In both kinds of test, most of the time is the page's own work: Rails renders, Stimulus connects controllers and Turbo renders frames and streams.
+
+### Bugs found
+
+- **Writebook, `edit page`.** The system test never saved the page. It gave its content to the editor helper as a `with:` hash, but the helper takes the content as its second argument, so the editor got the hash. The helper also changed the value without an `input` event, so the autosave form stayed clean and Save sent nothing. The assertions only read the editor's preview, so the test passed. The branch fixes the helper and the call, and checks that the page body was saved.
+- **Writebook, `publish`.** This system test failed 1 time in 16 in Chrome, because it races the autosave. Its interaction test settles the autosave first and passes on every run.
+- **Campfire and Fizzy.** Moving their tests found no bugs in the apps.
+
+### Changes the apps needed
+
+Most tests moved with the same steps. Some needed small changes in the app's test code, not in the app:
+
+- **Campfire.**
+  - `ApplicationInteractionTestCase` reads whether a room is read or unread from its CSS classes, not from how the browser draws it.
+  - The 2 mention tests call `stub_layout "#composer lexxy-editor"`, because Lexxy positions its mention menu at the caret.
+  - The spoofing test reads the server's answer with `fetch`. It no longer saves screenshots; a separate system test keeps them.
+  - The link-unfurling tests allow `localhost` in WebMock.
+- **Writebook.** The editor helper sends an `input` event after it changes the value, as a person typing does.
+- **Fizzy.** No changes to its test code.
+
+### Tests that are still system tests
+
+Each remaining system test needs something that jsdom does not do. The exception is one Fizzy test that we have not tried yet.
+
+**Campfire (3):**
+
+- **`message_id_spoofing_screenshots_test.rb` (1).** It saves before and after screenshots for a security advisory. jsdom cannot take screenshots. The checks in this test also run as an interaction test, so this test can go if nobody needs the screenshots.
+- **`push_subscription_resync_test.rb` (2).** These tests fake the notification permission, a service worker and a push subscription through the Chrome DevTools Protocol before the page's scripts run. jsdom has no service workers or Push API, and rails-jsdom cannot run a script before the page's own scripts.
+
+**Fizzy (29):**
+
+- **`mermaid_diagram_test.rb` (18).** Drawing a Mermaid diagram measures text on a canvas, and jsdom has no canvas. The 2 editor tests that do not draw a diagram moved.
+- **`board_scroll_test.rb` (4).** They check scroll positions, find elements at a point with `elementFromPoint`, and move the mouse to coordinates. All of these need layout.
+- **`activity_pagination_test.rb` (1) and `column_pagination_refresh_test.rb` (1).** The next page loads when its link scrolls into view, through `IntersectionObserver`. jsdom does not lay out the page, so nothing scrolls into view.
+- **`code_block_styling_test.rb` (2).** They check the background colours the browser computes from the app's CSS.
+- **`oauth_consent_test.rb` (1).** After the consent form posts, the browser follows the redirect to the client only if the page's `form-action` Content Security Policy allows it. The test checks that a real browser does. jsdom does not enforce Content Security Policy.
+- **`smoke_test.rb`, `dragging card to a new column` (1).** Drag and drop finds the drop target from element positions.
+- **`board_keyboard_focus_test.rb` (1).** We have not tried to move this test yet. It uses keys, focus and Turbo navigation, which rails-jsdom supports.
 
 ## Requirements
 
@@ -180,15 +243,15 @@ The full API reference is at **[jakehow.github.io/rails-jsdom](https://jakehow.g
 | [`refresh`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-refresh) | ✅ | Requests the current URL again, without a history entry |
 | [`go_back`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-go_back), [`go_forward`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-go_forward) | ✅ | Across Turbo Drive visits and full page loads |
 | [`using_session`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-using_session) | ✅ | Each session has its own cookies and page; broadcasts reach a session's page when the test returns to it |
-| [`click_on`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-click_on), [`click_link_or_button`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-click_link_or_button) | ✅ |  |
-| [`click_link`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-click_link) | ✅ |  |
+| [`click_on`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-click_on), [`click_link_or_button`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-click_link_or_button) | ✅ | A button also matches by its `name`, as in system tests. Without a locator, clicks the only link or button in the current `within` scope |
+| [`click_link`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-click_link) | ✅ | Without a locator, clicks the only link in the current `within` scope |
 | [`click_button`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-click_button) | ✅ | Without a locator, clicks the only button in the current `within` scope, as in system tests |
 | [`fill_in`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-fill_in) | ✅ | Text-like fields only, as in system tests |
 | [`check`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-check), [`uncheck`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-uncheck) | ✅ |  |
 | [`choose`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-choose) | ✅ |  |
 | [`select`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-select), [`unselect`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-unselect) | ✅ |  |
-| [`attach_file`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-attach_file) | ✅ | Forms submit files to Rails as multipart requests. The block form, `attach_file(paths) { click_on "Upload" }`, answers the file chooser a script opens |
-| [`send_keys`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-send_keys) | ✅ | Keys perform the common browser default actions; typing happens at the end of the value, with no caret or selection |
+| [`attach_file`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-attach_file) | ✅ | Forms submit files to Rails as multipart requests. The block form, `attach_file(paths) { click_on "Upload" }`, answers the file chooser a script opens. Hidden file fields work, so `make_visible:` raises an error that says to remove it |
+| [`send_keys`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-send_keys) | ✅ | Keys perform the common browser default actions; typing happens at the end of the value, with no caret or selection. Key names are the system test ones, including `:arrow_down` and `:return` |
 | [`within`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-within) | ✅ | CSS selector or an element from `find`; also scopes `assert_dom` |
 | [`within_fieldset`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-within_fieldset), [`within_table`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-within_table) | ✅ |  |
 | [`find`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-find), [`all`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-all), [`first`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-first) | ✅ | `text:`, `exact_text:`, `visible:`, `id:`, `class:` (a list, with `"!name"` excluding a class) and the field filters; without a selector they match any element |
@@ -220,7 +283,7 @@ The full API reference is at **[jakehow.github.io/rails-jsdom](https://jakehow.g
 | `within_window`, `switch_to_window` | ❌ | Not planned: check a `target="_blank"` link with `assert_link`, then `visit` it |
 | `drag_to` | ❌ | Never: drag-and-drop needs layout, which jsdom does not have |
 | `take_screenshot` | ❌ | Never: jsdom does not render pages |
-| Waiting (`default_max_wait_time`, retrying assertions) | — | Not needed: the page settles before every action and assertion. A `wait:` option raises an error that says to remove it |
+| Waiting (`default_max_wait_time`, retrying assertions) | — | Not needed: the page settles before every action and assertion. A `wait:` option raises an error that says to remove it, and any other option a method does not support raises an `ArgumentError` that names it |
 
 ### Only in rails-jsdom
 
@@ -248,7 +311,7 @@ test "a new comment appears for everyone watching the task" do
 end
 ```
 
-The page's `WebSocket` is the browser API, so `@rails/actioncable`, Turbo's `<turbo-cable-stream-source>` and your own consumers use it unchanged. Its connection goes through your app as a WebSocket upgrade carrying the test session's cookies, so middleware, routing, origin checks and your `ApplicationCable::Connection` run as in production: `connect` identifies the user or rejects the connection, and each channel runs its own `subscribed` (including `reject`), `stream_from`, `transmit`, actions and `periodically` timers. Broadcasts made before the page subscribed are not delivered, and a channel that rejects a subscription receives nothing. `broadcast_*_later` broadcasts arrive when the test performs the jobs.
+The page's `WebSocket` is the browser API, so `@rails/actioncable`, Turbo's `<turbo-cable-stream-source>` and your own consumers use it unchanged. Its connection goes through your app as a WebSocket upgrade carrying the test session's cookies, so middleware, routing, origin checks and your `ApplicationCable::Connection` run as in production: `connect` identifies the user or rejects the connection, and each channel runs its own `subscribed` (including `reject`), `stream_from`, `transmit`, actions and `periodically` timers. Broadcasts made before the page subscribed are not delivered, and a channel that rejects a subscription receives nothing. Leaving a page closes its connections, so channels run `unsubscribed`, and `ActionCable.server.remote_connections.where(...).disconnect` disconnects a page as it would a browser. `broadcast_*_later` broadcasts arrive when the test performs the jobs.
 
 Action Cable runs in the test's thread, so nothing is left to chance:
 
@@ -299,7 +362,7 @@ Each parallel test worker starts its own Node process the first time it runs an 
 
 See [what you lose](#trade-offs-compared-with-system-tests). In addition:
 
-- jsdom lacks some browser APIs. The runtime stubs the common ones so controllers keep working: `matchMedia` (never matches), `IntersectionObserver` and `ResizeObserver` (never report), `scrollTo`, `scroll` and `scrollBy` on the window and on elements, and `scrollIntoView` (do nothing), `checkVisibility` (false for the elements that assertions treat as hidden), `MessageChannel` (each message is delivered as a timer on the virtual clock), `load` on inserted `<style>` and stylesheet `<link>` elements and on images once their `src` is set (stylesheets and images are not fetched, so code that waits for them, such as Turbo merging a new page head, goes on), `URL.createObjectURL` (a `blob:` URL that nothing can fetch) and `URL.revokeObjectURL` (does nothing), `DataTransfer` and `ClipboardEvent` (so a test can dispatch a paste, as system tests do), `getBoundingClientRect` and `getClientRects` on a `Range` (an empty box, as elements have), `navigator.clipboard` (writes are dropped, reads are empty), `CSS.escape`, `<dialog>` `show`, `showModal` and `close`, the Fullscreen API (`requestFullscreen`, `exitFullscreen`, `fullscreenElement`, `fullscreenEnabled` and `fullscreenchange`, as on a desktop browser; nothing is drawn), and form participation for form-associated custom elements (`ElementInternals` `form`, `setFormValue`, `setValidity` and `validity`; their values are part of `new FormData(form)`). The page also behaves as a desktop browser without touch: `ontouchstart` and the other touch handlers are absent and `navigator.maxTouchPoints` is 0. A page that needs another missing API needs a small stub in your controller or test.
+- jsdom lacks some browser APIs. The runtime stubs the common ones so controllers keep working: `matchMedia` (never matches), `IntersectionObserver` and `ResizeObserver` (never report), `scrollTo`, `scroll` and `scrollBy` on the window and on elements, and `scrollIntoView` (do nothing), `checkVisibility` (false for the elements that assertions treat as hidden), `MessageChannel` (each message is delivered as a timer on the virtual clock), `load` on inserted stylesheet `<link>` elements and on images once their `src` is set (stylesheets and images are not fetched, so code that waits for them, such as Turbo merging a new page head, goes on), `URL.createObjectURL` (a `blob:` URL that nothing can fetch) and `URL.revokeObjectURL` (does nothing), `DataTransfer` and `ClipboardEvent` (so a test can dispatch a paste, as system tests do), `getBoundingClientRect` and `getClientRects` on a `Range` (an empty box, as elements have), `navigator.clipboard` (writes are dropped, reads are empty), `<dialog>` `show`, `showModal` and `close`, the Fullscreen API (`requestFullscreen`, `exitFullscreen`, `fullscreenElement`, `fullscreenEnabled` and `fullscreenchange`, as on a desktop browser; nothing is drawn), and form participation for form-associated custom elements (`ElementInternals` `form`, `setFormValue`, `setValidity` and `validity`; their values are part of `new FormData(form)`). The page also behaves as a desktop browser without touch: `ontouchstart` and the other touch handlers are absent and `navigator.maxTouchPoints` is 0. A page that needs another missing API needs a small stub in your controller or test.
 - Stimulus outlets are not tested yet.
 
 ## Development
