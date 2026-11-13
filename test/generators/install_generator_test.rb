@@ -10,7 +10,6 @@ module RailsJsdom
       prepare_destination
       write "test/test_helper.rb", %(ENV["RAILS_ENV"] ||= "test"\nrequire_relative "../config/environment"\nrequire "rails/test_help"\n)
       write ".gitignore", "/log/*\n"
-      write "config/cable.yml", "test:\n  adapter: test\n"
       Generators::InstallGenerator.any_instance.stubs(:run).with("npm --version", capture: true, verbose: false).returns("11.10.0\n")
     end
 
@@ -118,28 +117,6 @@ module RailsJsdom
       run_generator %w[--skip-npm]
 
       assert_no_file ".gitignore"
-    end
-
-    test "says nothing about ActionCable when the test environment uses the test adapter" do
-      assert_no_match(/adapter: test/, run_generator(%w[--skip-npm]))
-    end
-
-    test "reads ERB in config/cable.yml" do
-      write "config/cable.yml", "test:\n  adapter: <%= \"test\" %>\n"
-
-      assert_no_match(/adapter: test/, run_generator(%w[--skip-npm]))
-    end
-
-    test "warns when the test environment uses another ActionCable adapter" do
-      write "config/cable.yml", "test:\n  adapter: async\n"
-
-      assert_match(/Set `adapter: test` for the test environment in config\/cable.yml/, run_generator(%w[--skip-npm]))
-    end
-
-    test "warns when the app has no config/cable.yml" do
-      File.delete(File.join(destination_root, "config/cable.yml"))
-
-      assert_match(/Set `adapter: test`/, run_generator(%w[--skip-npm]))
     end
 
     private

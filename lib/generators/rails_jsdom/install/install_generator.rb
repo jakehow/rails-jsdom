@@ -1,6 +1,4 @@
-require "erb"
 require "json"
-require "yaml"
 require "rails/generators"
 
 module RailsJsdom
@@ -70,12 +68,6 @@ module RailsJsdom
         append_to_file ".gitignore", "\n/node_modules\n" if File.exist?(gitignore) && !File.read(gitignore).include?("node_modules")
       end
 
-      # Warns when the test environment does not use the ActionCable `test`
-      # adapter, which Turbo Stream broadcasts need.
-      def check_cable_adapter
-        say_status :warning, "Set `adapter: test` for the test environment in config/cable.yml so pages receive Turbo Stream broadcasts", :yellow unless test_cable_adapter?
-      end
-
       private
 
       def npm_settings
@@ -89,15 +81,6 @@ module RailsJsdom
 
       def existing_package
         JSON.parse(File.read(path("package.json"))) if File.exist?(path("package.json"))
-      end
-
-      def test_cable_adapter?
-        cable = path("config/cable.yml")
-        File.exist?(cable) && cable_config(cable).dig("test", "adapter") == "test"
-      end
-
-      def cable_config(file)
-        YAML.safe_load(ERB.new(File.read(file)).result, aliases: true)
       end
 
       def path(relative)
