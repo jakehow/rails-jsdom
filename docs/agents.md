@@ -46,7 +46,7 @@ end
 - Put the test in `test/interactions/` and subclass `RailsJsdom::TestCase`. It is an `ActionDispatch::IntegrationTest`, so fixtures, `perform_enqueued_jobs` and Rails assertions work.
 - Sign in the way the app's integration tests do, usually by posting to the session controller.
 - Every action settles the page before it returns: timers up to one second ahead have run, no request is pending, and Turbo Stream broadcasts have been applied. Never add `sleep`, waits or retries.
-- A JavaScript error, an unhandled promise rejection or an unexpected `alert`, `confirm` or `prompt` fails the action. Wrap actions that show a dialog in `accept_alert`, `accept_confirm`, `dismiss_confirm`, `accept_prompt` or `dismiss_prompt`.
+- A JavaScript error, an unhandled promise rejection or an unexpected `alert`, `confirm` or `prompt` fails the action. CSS that jsdom cannot parse, such as nested rules, does not. Wrap actions that show a dialog in `accept_alert`, `accept_confirm`, `dismiss_confirm`, `accept_prompt` or `dismiss_prompt`.
 - `assert_selector` and `find` count only visible elements unless you pass `visible: false`. `assert_dom` and `assert_select` see every element.
 - Requests to other hosts fail like a network error. Answer them with `stub_fetch` after the page loads.
 - Broadcasts made with `broadcast_*_later` arrive when the test performs the jobs, for example `perform_enqueued_jobs { click_on "Post" }`.

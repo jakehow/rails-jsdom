@@ -87,6 +87,21 @@ test("dialog elements open and close, firing close only when they were open", as
   assert.deepEqual(result, [true, false, "done", 2])
 })
 
+test("a stylesheet jsdom cannot parse does not fail the page, as browsers skip CSS they cannot parse", async () => {
+  await runner.load("<style>.a { .b { display: none } }</style><p>Page</p>")
+
+  assert.equal((await runner.snapshot()).text, "Page")
+})
+
+test("jsdom reports nested CSS as a stylesheet it cannot parse", () => {
+  const types = []
+  const virtualConsole = new VirtualConsole()
+  virtualConsole.on("jsdomError", error => types.push(error.type))
+  new JSDOM("<style>.a { .b { display: none } }</style>", { virtualConsole })
+
+  assert.deepEqual(types, ["css-parsing"])
+})
+
 test("browser APIs jsdom lacks are stubbed", async () => {
   await runner.load(`<p id="p">Page</p>`)
   const result = await runner.evaluate(`(async () => {

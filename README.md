@@ -48,7 +48,7 @@ end
 4. Every `fetch` the page makes — your controllers' own calls, Turbo Drive visits, Turbo form submissions, Turbo Frames — is sent back to Ruby and answered by Rails **in-process**, with the test's cookies and session, following redirects. Turbo then renders the response exactly as it would in a browser, including Turbo Stream responses.
 5. After every action, the runner **settles** the page deterministically: it runs timers on a virtual clock and waits until no Rails request is pending.
 6. Assertions read a snapshot of the live DOM: `assert_dom`, `assert_select` and `css_select` work as in any Rails test because `document_root_element` is the page.
-7. JavaScript errors, unhandled promise rejections, Stimulus errors and unexpected alert, confirm or prompt dialogs fail the action that caused them.
+7. JavaScript errors, unhandled promise rejections, Stimulus errors and unexpected alert, confirm or prompt dialogs fail the action that caused them. A stylesheet that jsdom cannot parse does not: browsers skip CSS they cannot parse, and jsdom does not parse some valid CSS, such as nested rules.
 
 ## Trade-offs compared with system tests
 
