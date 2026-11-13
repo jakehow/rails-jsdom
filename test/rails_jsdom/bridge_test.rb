@@ -77,6 +77,16 @@ module RailsJsdom
       error_from { @bridge.call(command: "click") }
     end
 
+    test "#call stops Node and fails when the page does not answer in time" do
+      RailsJsdom.command_timeout = 0.1
+      silent_output, _writer = IO.pipe
+      Open3.stubs(:popen3).returns([ StringIO.new, silent_output, StringIO.new, nil ])
+
+      assert_match(/did not answer within 0\.1 seconds/, error_from { @bridge.call(command: "evaluate") }.message)
+    ensure
+      RailsJsdom.command_timeout = nil
+    end
+
     test "#call starts Node once for every message" do
       Open3.expects(:popen3).once.returns(node(results(nil, nil, nil)))
       @bridge.call(command: "click")

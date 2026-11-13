@@ -56,6 +56,17 @@ class PageInteractionTest < RailsJsdom::TestCase
     assert_dom "#outside", text: "Outside 1"
   end
 
+  test "a page in an endless loop fails the command, and the next page works in a new process" do
+    RailsJsdom.command_timeout = 2
+    visit login_path
+    error = assert_raises(RailsJsdom::Error) { execute_script("while (true) {}") }
+    visit login_path
+
+    assert_equal [ true, true ], [ error.message.include?("did not answer within 2 seconds"), has_field?("Your name") ]
+  ensure
+    RailsJsdom.command_timeout = nil
+  end
+
   test "a page fetch reaches Rails in the test's session" do
     visit login_path
     fill_in "Your name", with: "Ada"

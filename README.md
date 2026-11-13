@@ -255,7 +255,9 @@ Server messages arrive on Action Cable's own threads, so settling also waits for
 - **Replies the protocol requires** — the welcome after connecting, and the confirmation or rejection of each subscription — are waited for, up to `RailsJsdom.cable_reply_timeout` seconds (default 2).
 - **After the page performs an action or the app broadcasts**, settling waits until no message has arrived for `RailsJsdom.cable_quiet_period` seconds (default 0.05).
 
-Messages that have arrived are delivered before the next page timer runs, so the page's virtual clock never gets ahead of a connection that is answering. If messages arrive after an assertion on a slow machine, raise the quiet period in `test/test_helper.rb`:
+Messages that have arrived are delivered before the next page timer runs, so the page's virtual clock never gets ahead of a connection that is answering. A page whose script never stops, such as an endless loop, cannot answer. After `RailsJsdom.command_timeout` seconds (default 30) its Node process is stopped and the command fails with an error that says so; the next command starts a new process.
+
+If messages arrive after an assertion on a slow machine, raise the quiet period in `test/test_helper.rb`:
 
 ```ruby
 RailsJsdom.cable_quiet_period = 0.2

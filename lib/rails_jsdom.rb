@@ -1,5 +1,6 @@
 require "json"
 require "open3"
+require "timeout"
 require_relative "rails_jsdom/version"
 
 # Browserless interaction tests for Rails apps built with Stimulus, Turbo and
@@ -21,9 +22,17 @@ module RailsJsdom
   TIMER_HORIZON = 1000
   CABLE_QUIET_PERIOD = 0.05
   CABLE_REPLY_TIMEOUT = 2
+  COMMAND_TIMEOUT = 30
 
   class << self
-    attr_writer :cable_quiet_period, :cable_reply_timeout
+    attr_writer :cable_quiet_period, :cable_reply_timeout, :command_timeout
+
+    # Seconds to wait for the page to answer a command. A page in an endless
+    # loop never answers; after this long its Node process is stopped and the
+    # command fails, instead of the test run hanging.
+    def command_timeout
+      @command_timeout || COMMAND_TIMEOUT
+    end
 
     # Seconds to wait for more cable messages after the page performs an
     # Action Cable action or the app broadcasts, before the page counts as

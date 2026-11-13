@@ -63,13 +63,16 @@ module RailsJsdom
     end
 
     def read
-      line = @output.gets
+      line = Timeout.timeout(RailsJsdom.command_timeout) { @output.gets }
       if line
         JSON.parse(line)
       else
         stop
         raise Error, "The RailsJsdom Node process exited. See the [rails_jsdom] lines in the Rails log."
       end
+    rescue Timeout::Error
+      stop
+      raise Error, "The page did not answer within #{RailsJsdom.command_timeout} seconds, so its Node process was stopped. A script may be in an endless loop. The next command starts a new process. Raise RailsJsdom.command_timeout if your pages need longer."
     end
 
     def write(payload)
