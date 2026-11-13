@@ -96,15 +96,18 @@ The esbuild bundle is built once per test worker. Each `visit` then costs a Rail
 
 To test rails-jsdom on real apps, we moved the system tests of three open-source Rails apps from 37signals to interaction tests wherever possible: [Campfire](https://github.com/basecamp/once-campfire), [Fizzy](https://github.com/basecamp/fizzy) and [Writebook](https://github.com/basecamp/writebook). The work is on the `interaction-tests` branch of each fork: [once-campfire](https://github.com/jakehow/once-campfire/tree/interaction-tests), [fizzy](https://github.com/jakehow/fizzy/tree/interaction-tests) and [writebook](https://github.com/jakehow/writebook/tree/interaction-tests). The upstream apps still use their system tests.
 
-| App | System tests | Moved to interaction tests | Still system tests | System tests (Chrome) | Interaction tests | Speedup |
+| App | System tests on `main` | Moved to interaction tests | Still system tests | Moved tests as system tests | Moved tests as interaction tests | Speedup |
 |---|---|---|---|---|---|---|
-| Campfire | 30 | 28 | 3 | 317.7s | 19.3s | 16.5x faster (94% less time) |
+| Campfire | 30 | 28 | 3 (1 is new, see below) | 317.7s | 19.3s | 16.5x faster (94% less time) |
 | Fizzy | 47 | 18 | 29 | 21.5s | 9.6s | 2.2x faster (55% less time) |
 | Writebook | 3 | 3 | 0 | 6.8s | 3.7s | 1.8x faster (45% less time) |
 
+The times compare only the tests that moved: each moved test as a system test on the app's `main` branch, against the interaction test that replaced it. The tests that are still system tests are not in either time.
+
+Campfire has 3 system tests left, not 2, because one moved test saved screenshots. Its checks moved to an interaction test, and its screenshots stay in a new system test.
+
 How we measured:
 
-- The two columns of times are for the same tests, the system test from the app's `main` branch against the interaction test that replaced it.
 - All runs used one process (`PARALLEL_WORKERS=1`) on one Apple M1 Max.
 - System tests ran in headless Chrome through Selenium, as each app configures them.
 - Interaction tests ran on Node 26.13.1, jsdom 31.0.0 and Rails 8.2.0.alpha, the edge Rails the apps use.
