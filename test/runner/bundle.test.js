@@ -41,3 +41,9 @@ test("a dynamic import of a module the importmap lacks fails only when it runs",
 
   assert.equal((await runner.snapshot()).text, "not loaded")
 })
+
+test("controllers connect after tasks the page queued while its scripts ran, as when browsers load them with import()", async () => {
+  await runner.load(`<script>window.order = []; setTimeout(() => order.push("page task"), 0)</script><p data-controller="hello"></p><script>new MutationObserver(() => order.push(document.querySelector("p").textContent ? "connected" : "")).observe(document.querySelector("p"), { childList: true })</script>`)
+
+  assert.deepEqual(await runner.evaluate("order"), ["page task", "connected"])
+})
