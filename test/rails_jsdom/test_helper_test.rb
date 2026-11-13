@@ -177,6 +177,17 @@ module RailsJsdom
       assert_equal [ { error: "RailsJsdom opens cable connections only to www.example.com, not to wss://push.example.com/socket." } ], replies
     end
 
+    test "#click opens a cable connection with the session's cookies for the socket's path" do
+      request = { "kind" => "cable", "action" => "open", "socket" => "1:1", "url" => "ws://www.example.com/cable", "protocols" => [] }
+      bridge_answering(request)
+      jar = stub
+      jar.stubs(:for).with(URI("http://www.example.com/cable")).returns("visitor=ada")
+      @helper.stubs(host: "www.example.com", integration_session: stub(cookies: jar))
+      RailsJsdom::Cable.any_instance.expects(:answer).with(request, "visitor=ada").returns({ protocol: "actioncable-v1-json" })
+
+      @helper.click("Connect")
+    end
+
     private
 
     def stub_bridge(value = nil)
