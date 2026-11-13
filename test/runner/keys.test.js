@@ -221,6 +221,28 @@ test("enter and shift+enter in a contenteditable insert a break, with the paragr
   assert.deepEqual([await read("e.innerHTML"), await read("events.filter(event => event.startsWith('input'))")], ["a<br><br>", ["input insertParagraph ", "input insertLineBreak "]])
 })
 
+test("backspace after typing past a break in a contenteditable deletes the last character typed", async () => {
+  await runner.load(`<div id="e" contenteditable>a</div>`)
+  await typeInto([key("enter"), text("xy"), key("backspace")], "#e")
+
+  assert.equal(await read("e.innerHTML"), "a<br>x")
+})
+
+test("backspace in a contenteditable deletes a break before the caret, then the text before it", async () => {
+  await runner.load(`<div id="e" contenteditable>ab</div>`)
+  await typeInto([key("enter"), key("backspace"), key("backspace")], "#e")
+
+  assert.equal(await read("e.innerHTML"), "a")
+})
+
+test("backspace in a contenteditable removes an empty text node before the caret", async () => {
+  await runner.load(`<div id="e" contenteditable>a</div>`)
+  await read(`e.append(""); e.focus(); getSelection().collapse(e, 2); true`)
+  await runner.run({ command: "send_keys", keys: [key("backspace")] })
+
+  assert.deepEqual([await read("e.childNodes.length"), await read("e.textContent")], [1, "a"])
+})
+
 test("an editor that cancels beforeinput keeps the content, and no input event fires", async () => {
   await runner.load(`<div id="e" contenteditable>a</div>${EDITABLE_EVENTS}<script>e.addEventListener("beforeinput", event => event.preventDefault())</script>`)
   await typeInto([text("b")], "#e")
