@@ -64,8 +64,14 @@ test("reading the page before loading one fails", async () => {
   await assert.rejects(runner.run({ command: "traverse", delta: -1 }), /visit a page or mount a partial first/)
 })
 
-test("a page without stream sources lists no streams", async () => {
-  assert.deepEqual(await runner.run({ command: "streams" }), [])
+test("settle without a page answers nothing", async () => {
+  assert.equal(await runner.run({ command: "settle" }), null)
+})
+
+test("settle settles the page and answers nothing", async () => {
+  await runner.load("<p>Page</p>")
+
+  assert.equal(await runner.run({ command: "settle" }), null)
 })
 
 test("closing the input stream exits", async () => {

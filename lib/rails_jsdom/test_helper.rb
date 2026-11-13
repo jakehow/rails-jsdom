@@ -623,12 +623,12 @@ module RailsJsdom
     end
 
     def rails_jsdom_read(handle) # :nodoc:
-      rails_jsdom_deliver_broadcasts
+      rails_jsdom_receive_cable
       RailsJsdom.bridge.call(command: "read", handle: handle)
     end
 
     def rails_jsdom_page_snapshot # :nodoc:
-      rails_jsdom_deliver_broadcasts
+      rails_jsdom_receive_cable
       RailsJsdom.bridge.call(command: "snapshot", scope: [])
     end
 
@@ -675,7 +675,7 @@ module RailsJsdom
     end
 
     def rails_jsdom_matches(query)
-      rails_jsdom_deliver_broadcasts
+      rails_jsdom_receive_cable
       query.filter(RailsJsdom.bridge.call(**query.message, scope: rails_jsdom_scope))
     end
 
@@ -720,36 +720,34 @@ module RailsJsdom
     end
 
     def rails_jsdom_snapshot
-      rails_jsdom_deliver_broadcasts
+      rails_jsdom_receive_cable
       RailsJsdom.bridge.call(command: "snapshot", scope: rails_jsdom_scope)
     end
 
-    def rails_jsdom_deliver_broadcasts
-      messages = rails_jsdom_undelivered_broadcasts
-      if messages.any?
-        rails_jsdom_call(command: "deliver", messages: messages)
-        rails_jsdom_deliver_broadcasts
-      end
+    def rails_jsdom_cable_answer(request)
+      uri = URI(request.fetch("url", "ws://#{host}"))
+      uri.host == host ? rails_jsdom_cable.answer(request, rails_jsdom_cookie(uri)) : { error: "RailsJsdom opens cable connections only to #{host}, not to #{uri}." }
     end
 
-    def rails_jsdom_undelivered_broadcasts
-      rails_jsdom_deliveries.undelivered_messages(rails_jsdom_session_name, rails_jsdom_confirmed_streams.values.uniq)
+    def rails_jsdom_cookie(uri)
+      integration_session.cookies.for(URI("http://#{host}#{uri.path}"))
     end
 
-    def rails_jsdom_confirmed_streams
-      sources = RailsJsdom.bridge.call(command: "streams")
-      verified = sources.to_h { |source| [ source.fetch("name"), RailsJsdom.verified_stream(source["channel"], source.fetch("name")) ] }.compact
-      RailsJsdom.bridge.call(command: "confirm", names: verified.keys) if verified.any?
-      verified
+    def rails_jsdom_receive_cable
+      rails_jsdom_call(command: "settle") if rails_jsdom_cable.open?
     end
 
-    def rails_jsdom_deliveries
-      @rails_jsdom_deliveries ||= TurboStreamDeliveries.new
+    def rails_jsdom_cable
+      (@rails_jsdom_cables ||= {})[rails_jsdom_session_name] ||= Cable.new
+    end
+
+    def rails_jsdom_close_cables # :nodoc:
+      (@rails_jsdom_cables || {}).each_value(&:close)
     end
 
     def rails_jsdom_perform(**message)
-      rails_jsdom_deliver_broadcasts
-      rails_jsdom_call(message).tap { rails_jsdom_deliver_broadcasts }
+      rails_jsdom_receive_cable
+      rails_jsdom_call(message)
     end
 
     def rails_jsdom_call(message)
@@ -757,6 +755,10 @@ module RailsJsdom
     end
 
     def rails_jsdom_fetch(fetch)
+      fetch["kind"] == "cable" ? rails_jsdom_cable_answer(fetch) : rails_jsdom_http_answer(fetch)
+    end
+
+    def rails_jsdom_http_answer(fetch)
       uri = URI(fetch.fetch("url"))
       if uri.host == host
         redirected = rails_jsdom_request(fetch.fetch("method"), uri.request_uri, params: fetch["body"]&.unpack1("m"), headers: fetch.fetch("headers"))

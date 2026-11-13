@@ -45,7 +45,7 @@ end
 
 - Put the test in `test/interactions/` and subclass `RailsJsdom::TestCase`. It is an `ActionDispatch::IntegrationTest`, so fixtures, `perform_enqueued_jobs` and Rails assertions work.
 - Sign in the way the app's integration tests do, usually by posting to the session controller.
-- Every action settles the page before it returns: timers up to one second ahead have run, no request is pending, and Turbo Stream broadcasts have been applied. Never add `sleep`, waits or retries.
+- Every action settles the page before it returns: timers up to one second ahead have run, no request is pending, and Action Cable messages the page is waiting for have arrived. Never add `sleep`, waits or retries.
 - A JavaScript error, an unhandled promise rejection or an unexpected `alert`, `confirm` or `prompt` fails the action. Wrap actions that show a dialog in `accept_alert`, `accept_confirm`, `dismiss_confirm`, `accept_prompt` or `dismiss_prompt`.
 - `assert_selector` and `find` count only visible elements unless you pass `visible: false`. `assert_dom` and `assert_select` see every element.
 - Requests to other hosts fail like a network error. Answer them with `stub_fetch` after the page loads.
@@ -62,7 +62,6 @@ Work through `test/system/` one file at a time.
    - screenshots;
    - drag and drop;
    - real iframes or new windows;
-   - custom ActionCable channels;
    - third-party scripts from a CDN.
 2. **Move the file** from `test/system/` to `test/interactions/`, and change the test class's superclass from `ApplicationSystemTestCase` to `RailsJsdom::TestCase`.
 3. **Remove browser setup:** `driven_by`, `using_wait_time`, `Capybara.*` settings, `sleep`, `wait_for_*` helpers, `take_screenshot` and window-size code.

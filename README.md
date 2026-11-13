@@ -31,7 +31,7 @@ end
   - [Supply chain](#supply-chain)
 - [Writing tests](#writing-tests)
 - [API](#api)
-- [Turbo Stream broadcasts](#turbo-stream-broadcasts)
+- [Action Cable and Turbo Stream broadcasts](#action-cable-and-turbo-stream-broadcasts)
 - [Timers and settling](#timers-and-settling)
 - [Continuous integration](#continuous-integration)
 - [Troubleshooting](#troubleshooting)
@@ -85,7 +85,6 @@ These work through the library imitating the browser, so the parts that depend o
 These are limits of this library, not of jsdom, and could be added:
 
 - **Third-party scripts loaded from a CDN.** Remote importmap pins are replaced by empty modules, and `<script src>` tags are not loaded. Pins vendored with `bin/importmap pin --download` are bundled and work. Remote scripts could be downloaded once and cached, but many of them (payment widgets, maps, charts, analytics) need cross-origin iframes, canvas, layout or their vendor's servers, so they would still need stubs.
-- **Custom ActionCable channels** with their own JavaScript consumers. Turbo Stream broadcasts *are* delivered (see below). Custom channels could be supported in-process by giving the page a fake WebSocket that runs the real channel in Ruby; reconnects and pings would stay untested.
 - **iframes and new windows.** Turbo Frames work, but real `<iframe>` content and links that open a new window or tab are not followed. Check such a link with `assert_link` and its `href`, then `visit` it.
 
 **Where the time goes**
@@ -125,7 +124,7 @@ The install generator:
 5. Warns if your npm is older than 11.10, which ignores `min-release-age`.
 6. Runs `npm install`. Pass `--skip-npm` to run it yourself.
 7. Adds `/node_modules` to `.gitignore`.
-8. Warns if `config/cable.yml` does not use the `test` adapter in the test environment, which [Turbo Stream broadcasts](#turbo-stream-broadcasts) need.
+8. Warns if `config/cable.yml` does not use the `test` adapter in the test environment, which [Action Cable](#action-cable-and-turbo-stream-broadcasts) needs.
 
 Running it again changes nothing that is already set up.
 
@@ -236,9 +235,9 @@ The full API reference is at **[jakehow.github.io/rails-jsdom](https://jakehow.g
 
 `assert_dom`, `assert_select` and `css_select` work as in any Rails test and read the live page.
 
-## Turbo Stream broadcasts
+## Action Cable and Turbo Stream broadcasts
 
-Pages that subscribe with `turbo_stream_from` receive broadcasts made during the test:
+A page's WebSocket connects to your app's real Action Cable server, in process. Pages that subscribe with `turbo_stream_from`, and your own channels with their JavaScript consumers, receive what the server sends during the test:
 
 ```ruby
 test "a new comment appears for everyone watching the task" do
@@ -249,9 +248,20 @@ test "a new comment appears for everyone watching the task" do
 end
 ```
 
-After each action (and before each assertion), the runner finds the page's `<turbo-cable-stream-source>` elements, verifies each signed stream name with the `verified_stream_name` of the channel the element names (`Turbo::StreamsChannel` when it names none), marks verified elements `connected` as Turbo does once a subscription is confirmed, reads the broadcasts recorded by the ActionCable `test` adapter, and applies new Turbo Stream messages with `Turbo.renderStreamMessage`. Broadcasts made before the page subscribed are skipped, forged stream names receive nothing, and each broadcast is applied once. `broadcast_*_later` broadcasts arrive when the test performs the jobs. A channel that cannot verify stream names receives nothing. The channel's `subscribed` method is not run, so authorization it does there, such as rejecting a user who is not a member, does not stop delivery; test it with an `ActionCable::Channel::TestCase`.
+The page's `WebSocket` is the browser API, so `@rails/actioncable`, Turbo's `<turbo-cable-stream-source>` and your own consumers use it unchanged. Its connection is handed to `ActionCable.server` as a WebSocket upgrade carrying the test session's cookies, so your `ApplicationCable::Connection` identifies the user, and each channel runs its own `subscribed` (including `reject`), `stream_from`, `transmit` and actions. Broadcasts made before the page subscribed are not delivered, and a channel that rejects a subscription receives nothing. `broadcast_*_later` broadcasts arrive when the test performs the jobs.
 
-Your test environment must use the ActionCable `test` adapter (`config/cable.yml`: `test: adapter: test`), which is the Rails default.
+Server messages arrive on Action Cable's own threads, so settling also waits for them, in two ways:
+
+- **Replies the protocol requires** — the welcome after connecting, and the confirmation or rejection of each subscription — are waited for, up to `RailsJsdom.cable_reply_timeout` seconds (default 2).
+- **After the page performs an action or the app broadcasts**, settling waits until no message has arrived for `RailsJsdom.cable_quiet_period` seconds (default 0.05).
+
+Messages that have arrived are delivered before the next page timer runs, so the page's virtual clock never gets ahead of a connection that is answering. If messages arrive after an assertion on a slow machine, raise the quiet period in `test/test_helper.rb`:
+
+```ruby
+RailsJsdom.cable_quiet_period = 0.2
+```
+
+Your test environment must use the ActionCable `test` adapter (`config/cable.yml`: `test: adapter: test`), which is the Rails default and delivers broadcasts to subscribed channels as well as recording them.
 
 ## Timers and settling
 

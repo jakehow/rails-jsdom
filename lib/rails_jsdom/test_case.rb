@@ -24,6 +24,9 @@ module RailsJsdom
   class TestCase < ActionDispatch::IntegrationTest
     include TestHelper
 
-    teardown { RailsJsdom.bridge.reset }
+    teardown do
+      RailsJsdom.bridge.reset
+      rails_jsdom_close_cables
+    end
   end
 end
