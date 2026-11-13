@@ -84,7 +84,7 @@ module RailsJsdom
       end
 
       def npm_version
-        @npm_version ||= Gem::Version.new(run("npm --version", capture: true, verbose: false).to_s.strip)
+        @npm_version ||= Gem::Version.new(run("npm --version", capture: true, verbose: false).to_s.lines.map(&:strip).grep(/\A\d+(\.\d+)+\z/).last)
       end
 
       def existing_package

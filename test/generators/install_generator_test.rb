@@ -90,6 +90,12 @@ module RailsJsdom
       assert_match(/npm 10.9.2 ignores min-release-age/, run_generator(%w[--skip-npm]))
     end
 
+    test "reads the npm version when npm warns about the release age setting" do
+      Generators::InstallGenerator.any_instance.stubs(:run).with("npm --version", capture: true, verbose: false).returns("npm warn Unknown project config \"min-release-age\". This will stop working in the next major version of npm.\n11.9.0\n")
+
+      assert_match(/npm 11.9.0 ignores min-release-age/, run_generator(%w[--skip-npm]))
+    end
+
     test "says nothing about npm when it holds back new releases" do
       assert_no_match(/ignores min-release-age/, run_generator(%w[--skip-npm]))
     end
