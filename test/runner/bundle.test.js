@@ -35,3 +35,9 @@ test("a controller added to the page later connects", async () => {
 
   assert.equal((await runner.snapshot()).text, "Hello, Ada from tiny Hello, Ada from tiny")
 })
+
+test("a dynamic import of a module the importmap lacks fails only when it runs", async () => {
+  await runner.load(`<p data-controller="lazy"></p>`)
+
+  assert.equal((await runner.snapshot()).text, "not loaded")
+})
