@@ -47,3 +47,12 @@ test("controllers connect after tasks the page queued while its scripts ran, as 
 
   assert.deepEqual(await runner.evaluate("order"), ["page task", "connected"])
 })
+
+test("controllers on a page connect in the order of their files, not of the page, as stimulus-loading imports them", async () => {
+  await runner.load(`<p id="h" data-controller="hello"></p><p id="u" data-controller="admin--user-panel"></p><script>
+    window.order = []
+    new MutationObserver(records => records.forEach(record => order.push(record.target.id))).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-connected"] })
+  </script>`)
+
+  assert.deepEqual(await runner.evaluate("order"), ["u", "h"])
+})
