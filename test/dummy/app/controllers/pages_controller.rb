@@ -17,6 +17,9 @@ class PagesController < ApplicationController
   def framed
   end
 
+  def styled
+  end
+
   def secret
     redirect_to login_path unless signed_in?
   end

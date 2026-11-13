@@ -102,6 +102,28 @@ test("jsdom reports nested CSS as a stylesheet it cannot parse", () => {
   assert.deepEqual(types, ["css-parsing"])
 })
 
+test("an inserted stylesheet fires load, as a browser fires it once the sheet is ready", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const loaded = []
+    const listen = element => element.addEventListener("load", () => loaded.push(element.localName + (element.rel ? "." + element.rel : "")))
+    const style = document.createElement("style")
+    const sheet = Object.assign(document.createElement("link"), { rel: "stylesheet", href: "/app.css" })
+    const icon = Object.assign(document.createElement("link"), { rel: "icon", href: "/icon.png" })
+    const wrapper = document.createElement("div")
+    const nested = document.createElement("style")
+    wrapper.append(nested)
+    ;[style, sheet, icon, nested].forEach(listen)
+    document.head.append(style, sheet, icon, "text")
+    document.body.append(wrapper)
+    const before = loaded.length
+    await new Promise(resolve => setTimeout(resolve, 1))
+    return [before, loaded]
+  })()`)
+
+  assert.deepEqual(result, [0, ["style", "link.stylesheet", "style"]])
+})
+
 test("browser APIs jsdom lacks are stubbed", async () => {
   await runner.load(`<p id="p">Page</p>`)
   const result = await runner.evaluate(`(async () => {
