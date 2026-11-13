@@ -8,7 +8,7 @@ const { start } = require("../../lib/rails_jsdom/runtime.js")
 
 const APP = path.join(__dirname, "fixtures", "app")
 const HOST = "http://app.test"
-const NO_CABLE = request => (request.action === "receive" ? [] : null)
+const NO_CABLE = () => null
 
 const SETUP = {
   command: "setup",
@@ -45,7 +45,7 @@ function fakeProcess() {
 }
 
 function answerFetch(runner, message) {
-  if (message.request.kind === "cable") return runner.reply(message.id, runner.cable(message.request))
+  if (message.request.kind === "cable") return runner.reply(message.id, runner.cable(message.request, message), runner.sync(message))
   runner.requests.push(message.request)
   const route = runner.routes[`${message.request.method} ${message.request.url}`]
   if (route === "hold") runner.held.push(message)
@@ -71,7 +71,7 @@ function client(io) {
     requests: [],
     held: [],
     routes: {},
-    cable: NO_CABLE, logged: () => io.logged,
+    cable: NO_CABLE, logged: () => io.logged, frames: [], deadline: null, sync: message => queuedSync(runner, message),
     send: message => io.stdin.write(`${JSON.stringify(message)}\n`),
     call: message => new Promise(resolve => {
       runner.waiting.push(resolve)
@@ -82,12 +82,16 @@ function client(io) {
       if (reply.type === "error") throw new Error(reply.message)
       return reply.value
     },
-    reply: (id, response) => runner.send({ type: "fetch_response", id, response }),
+    reply: (id, response, sync) => runner.send({ type: "fetch_response", id, response, sync }),
     load: (body, url = `${HOST}/`, title) => runner.run({ command: "load", html: document(body, title), url, history: "push" }),
     evaluate: script => runner.run({ command: "evaluate", script }),
     snapshot: (scope = []) => runner.run({ command: "snapshot", scope })
   }
   return runner
+}
+
+function queuedSync(runner, message) {
+  return { epoch: 0, now: message.clock, deadline: runner.deadline, frames: runner.frames.splice(0) }
 }
 
 function bodyText(request) {
@@ -104,6 +108,9 @@ async function clear(runner) {
   runner.held.length = 0
   runner.routes = {}
   runner.cable = NO_CABLE
+  runner.frames = []
+  runner.deadline = null
+  runner.sync = message => queuedSync(runner, message)
 }
 
 module.exports = { HOST, SETUP, bodyText, connect, document, html, prepare, clear }

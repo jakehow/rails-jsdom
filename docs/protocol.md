@@ -15,9 +15,11 @@
 
 | Message | Meaning |
 | --- | --- |
-| `{ "type": "result", "value": … }` | The command succeeded. `value` is JSON; a value JSON cannot carry, such as `undefined` or a function, becomes `null`. |
-| `{ "type": "error", "message": "…" }` | The command failed. `message` includes the JavaScript stack. Ruby raises `RailsJsdom::Error` with it. |
-| `{ "type": "fetch", "id": 7, "request": { … } }` | Not a reply. The page asked for a URL, and Node waits for Ruby's answer before the command can finish. |
+| `{ "type": "result", "value": …, "clock": … }` | The command succeeded. `value` is JSON; a value JSON cannot carry, such as `undefined` or a function, becomes `null`. |
+| `{ "type": "error", "message": "…", "clock": … }` | The command failed. `message` includes the JavaScript stack. Ruby raises `RailsJsdom::Error` with it. |
+| `{ "type": "fetch", "id": 7, "request": { … }, "clock": … }` | Not a reply. The page asked for a URL, and Node waits for Ruby's answer before the command can finish. |
+
+Every message from Node carries `clock`: the test clock in milliseconds since the test started. Before Ruby handles the message, it moves its frozen time to the test's start plus `clock` and runs its own timers that are due (see [Time](#time)).
 
 ## Requests to Rails
 
@@ -30,7 +32,7 @@ While a command runs, the page may request URLs: its own `fetch` and `XMLHttpReq
 | `request.headers` | Header names in lower case |
 | `request.body` | The body as base64, or `null`. Form bodies are `application/x-www-form-urlencoded`; forms with files are `multipart/form-data`, with the boundary in `content-type`. |
 
-Ruby answers with `{ "type": "fetch_response", "id": 7, "response": { … } }`. The response is either:
+Ruby answers with `{ "type": "fetch_response", "id": 7, "response": { … }, "sync": { … } }`, where `sync` is described under [Time](#time). The response is either:
 
 - `{ "status": 200, "headers": { … }, "body": "…", "url": "…", "redirected": false }`. Rails has followed redirects already; `url` is the URL Rails requested last (the requested URL, or the target of the last redirect), as the browser saw it before any middleware rewrote the path, and `redirected` says whether there was a redirect. For a page navigation, Node loads `body` as the new page at `url`.
 - `{ "error": "…" }` when Rails will not answer, for example a URL on another host. The page's `fetch` rejects with a `TypeError`, an `XMLHttpRequest` fires `error` with status 0, and a page navigation fails the command.
@@ -44,7 +46,9 @@ A page's WebSocket uses the same `fetch` message with `request.kind` set to `"ca
 | `"open"` | `socket` (an id), `url` (`ws:` or `wss:`), `protocols` | `{ "protocol": "…" }`, the subprotocol Action Cable chose, or `{ "error": "…" }` when the connection is refused |
 | `"send"` | `socket`, `data` (text) | `null` |
 | `"close"` | `socket` | `null` |
-| `"receive"` | none | The messages that have arrived for the session's sockets: `{ "socket", "data" }`, or `{ "socket", "closed": true, "code" }`. Ruby waits for replies the Action Cable protocol requires and for a quiet period after activity before answering. |
+| `"tick"` | none | `null`. Sent when the test clock reaches Ruby's next timer; Ruby runs it before answering. |
+
+Ruby runs Action Cable in the test's thread, so everything the server sends because of a request is ready when Ruby answers it. Those messages travel in the answer's `sync.frames`, and messages caused by the test itself travel in the `sync` of the next command. Each frame is `{ "socket", "data" }`, or `{ "socket", "closed": true, "code" }` when the server closed the connection. Node delivers them to the page before its next timer runs.
 
 ## Commands
 
@@ -71,7 +75,7 @@ Reads answer at once and do not change the page.
 
 ### Actions
 
-Actions change the page. After an action, Node settles the page before it replies:
+Actions change the page and carry a `sync` (see [Time](#time)). Before an action, Node catches up: it delivers the frames in `sync`, moves the clock forward to a time Ruby is ahead to, and runs the timers due by then without running later ones. After the action, Node settles the page before it replies:
 
 - It runs timers on the page's virtual clock, up to `horizon` milliseconds ahead.
 - It waits for every outstanding request to Rails.
@@ -93,7 +97,8 @@ An action fails if the page threw an error, rejected a promise, showed an unexpe
 | `element` | `handle`, `action`, `value` (for `set`), `keys` (for `send_keys`) | Runs `click`, `hover`, `double_click`, `right_click`, `set`, `select_option`, `unselect_option` or `send_keys` on that element |
 | `traverse` | `delta` (`-1` or `1`) | Goes back or forward through Turbo history entries, then through full page loads |
 | `evaluate` | `script`, optional `kind` (`"expression"` or `"statements"`), `receiver` (a handle or `null`) and `args` (an element arrives for `{ "rails_jsdom_element": handle }`) | Runs the script in the page. Result: its value, awaited if it is a promise. |
-| `settle` | none | Settles the page, delivering Action Cable messages that have arrived |
+| `settle` | none | Settles the page |
+| `catch_up` | none | Only catches up, as before any action |
 
 ## Setup
 
@@ -106,6 +111,19 @@ An action fails if the page threw an error, rejected a promise, showed an unexpe
 | `directories` | The importmap `pin_all_from` directories, as `{ prefix: path }` |
 | `horizon` | How far ahead, in milliseconds, settling runs timers |
 | `hidden` | The CSS selector for elements whose text is not visible |
+
+## Time
+
+The test has one clock, shared by Ruby and every page. Ruby freezes its time when the test starts. Every action and every `fetch_response` carries `sync`:
+
+| Field | Value |
+| --- | --- |
+| `epoch` | Milliseconds since 1970 at clock zero. The page's `Date` is `epoch` plus the clock; `performance.now()` is the clock. |
+| `now` | Ruby's time on the test clock. When it is ahead of the page's clock, because the test travelled, the page moves forward to it and runs the timers due on the way, in order. |
+| `deadline` | The clock time of Ruby's next timer — Action Cable's heartbeat and channels' `periodically` timers — or `null`. Before the page runs a timer due after it, Node moves the clock to `deadline` and sends a `tick`. |
+| `frames` | Action Cable messages for the session's sockets, as described under [Requests to Rails](#requests-to-rails) |
+
+When the test travels back, `epoch` moves back and the clock stays where it is, so no timer runs again.
 
 ## Finding elements
 

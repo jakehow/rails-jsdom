@@ -24,9 +24,15 @@ module RailsJsdom
   class TestCase < ActionDispatch::IntegrationTest
     include TestHelper
 
+    setup do
+      rails_jsdom_clock
+      rails_jsdom_take_over_pubsub
+    end
+
     teardown do
       RailsJsdom.bridge.reset
       rails_jsdom_close_cables
+      rails_jsdom_restore_pubsub
     end
   end
 end

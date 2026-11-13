@@ -1,6 +1,7 @@
 require "json"
 require "open3"
 require "timeout"
+require "action_cable"
 require_relative "rails_jsdom/version"
 
 # Browserless interaction tests for Rails apps built with Stimulus, Turbo and
@@ -20,8 +21,6 @@ module RailsJsdom
   REMOTE = %r{\A[a-z][a-z0-9+.-]*://}i
   HIDDEN_SELECTOR = "[hidden], template, script, style, noscript, dialog:not([open]), [style*='display: none'], [style*='display:none']".freeze
   TIMER_HORIZON = 1000
-  CABLE_QUIET_PERIOD = 0.05
-  CABLE_REPLY_TIMEOUT = 2
   COMMAND_TIMEOUT = 30
   OPTION_ADVICE = {
     wait: "rails-jsdom settles the page before every finder and assertion",
@@ -29,26 +28,13 @@ module RailsJsdom
   }.freeze
 
   class << self
-    attr_writer :cable_quiet_period, :cable_reply_timeout, :command_timeout
+    attr_writer :command_timeout
 
     # Seconds to wait for the page to answer a command. A page in an endless
     # loop never answers; after this long its Node process is stopped and the
     # command fails, instead of the test run hanging.
     def command_timeout
       @command_timeout || COMMAND_TIMEOUT
-    end
-
-    # Seconds to wait for more cable messages after the page performs an
-    # Action Cable action or the app broadcasts, before the page counts as
-    # settled. Raise it if messages arrive after assertions on a slow machine.
-    def cable_quiet_period
-      @cable_quiet_period || CABLE_QUIET_PERIOD
-    end
-
-    # Seconds to wait for a reply the Action Cable protocol requires, such as
-    # the welcome after connecting or the confirmation of a subscription.
-    def cable_reply_timeout
-      @cable_reply_timeout || CABLE_REPLY_TIMEOUT
     end
 
     def bridge
@@ -116,10 +102,14 @@ end
 
 require_relative "rails_jsdom/bridge"
 require_relative "rails_jsdom/query"
-require_relative "rails_jsdom/cable_frame"
+require_relative "rails_jsdom/clock"
+require_relative "rails_jsdom/cable_adapter"
+require_relative "rails_jsdom/cable_server"
 require_relative "rails_jsdom/cable_socket"
 require_relative "rails_jsdom/cable"
 require_relative "rails_jsdom/element"
 require_relative "rails_jsdom/test_helper"
 require_relative "rails_jsdom/page"
 require_relative "rails_jsdom/test_case"
+
+ActionCable::Server::Base.prepend(RailsJsdom::CableServer::Takeover)

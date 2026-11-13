@@ -5,7 +5,11 @@ module RailsJsdom
     FETCH = { "method" => "POST", "url" => "http://www.example.com/items?page=2", "headers" => { "accept" => "text/html", "content-type" => "text/plain" }, "body" => [ "a=1" ].pack("m0") }.freeze
 
     setup do
-      @helper = Class.new { include RailsJsdom::TestHelper }.new
+      @helper = Class.new { include ActiveSupport::Testing::TimeHelpers, RailsJsdom::TestHelper }.new
+    end
+
+    teardown do
+      @helper.travel_back
     end
 
     test "#visit loads the Rails response into Node" do
@@ -13,7 +17,7 @@ module RailsJsdom
       @helper.stubs(:process)
       @helper.stubs(:response).returns(stub(redirect?: false, body: "<p>Hi</p>"))
       @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/hi"))
-      bridge.expects(:call).with({ command: "load", html: "<p>Hi</p>", url: "http://www.example.com/hi", history: "push" })
+      bridge.expects(:call).with({ command: "load", html: "<p>Hi</p>", url: "http://www.example.com/hi", history: "push" }, @helper)
 
       @helper.visit("/hi")
     end
@@ -40,7 +44,7 @@ module RailsJsdom
     test "#mount_html loads the HTML as a page on the application host" do
       RailsJsdom.stubs(:bridge).returns(bridge = stub_bridge)
       @helper.stubs(:host).returns("www.example.com")
-      bridge.expects(:call).with({ command: "load", html: "<!DOCTYPE html><html><head></head><body><p>Fragment</p></body></html>", url: "http://www.example.com/", history: "push" })
+      bridge.expects(:call).with({ command: "load", html: "<!DOCTYPE html><html><head></head><body><p>Fragment</p></body></html>", url: "http://www.example.com/", history: "push" }, @helper)
 
       @helper.mount_html("<p>Fragment</p>")
     end
@@ -56,21 +60,21 @@ module RailsJsdom
       RailsJsdom.stubs(:bridge).returns(bridge = stub_bridge)
       ApplicationController.stubs(:render).with(partial: "shared/card", locals: { title: "Hi" }, assigns: { packs: [] }).returns("<p>Card</p>")
       @helper.stubs(:host).returns("www.example.com")
-      bridge.expects(:call).with({ command: "load", html: "<!DOCTYPE html><html><head></head><body><p>Card</p></body></html>", url: "http://www.example.com/", history: "push" })
+      bridge.expects(:call).with({ command: "load", html: "<!DOCTYPE html><html><head></head><body><p>Card</p></body></html>", url: "http://www.example.com/", history: "push" }, @helper)
 
       @helper.mount_partial("shared/card", locals: { title: "Hi" }, assigns: { packs: [] })
     end
 
     test "#click sends the locator with its scope and match" do
       RailsJsdom.stubs(:bridge).returns(bridge = stub_bridge)
-      bridge.expects(:call).with({ command: "click", locator: "Save", scope: [ { css: "form" } ], match: :first })
+      bridge.expects(:call).with({ command: "click", locator: "Save", scope: [ { css: "form" } ], match: :first }, @helper)
 
       @helper.within("form") { @helper.click("Save", match: :first) }
     end
 
     test "#fill_in sends the value as text" do
       RailsJsdom.stubs(:bridge).returns(bridge = stub_bridge)
-      bridge.expects(:call).with({ command: "fill_in", locator: "Team seats", with: "30", scope: [], match: nil })
+      bridge.expects(:call).with({ command: "fill_in", locator: "Team seats", with: "30", scope: [], match: nil }, @helper)
 
       @helper.fill_in("Team seats", with: 30)
     end
@@ -182,7 +186,7 @@ module RailsJsdom
     def bridge_answering(fetch)
       replies = []
       bridge = Object.new
-      bridge.define_singleton_method(:call) { |_message, &on_fetch| replies << on_fetch.call(fetch) }
+      bridge.define_singleton_method(:call) { |_message, peer| replies << peer.rails_jsdom_answer(fetch) }
       RailsJsdom.stubs(:bridge).returns(bridge)
       replies
     end

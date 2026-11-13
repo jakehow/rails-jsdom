@@ -1,20 +1,76 @@
-require "socket"
 require "rack/mock_request"
 
 module RailsJsdom
   class CableSocket # :nodoc:
-    class Refused < StandardError; end
+    ENV_KEY = "rails_jsdom.cable_socket".freeze
 
-    HANDSHAKE_TIMEOUT = 5
-
-    attr_reader :protocol
-
-    def self.env(url, protocols, cookie, io)
-      origin = origin(URI(url))
-      Rack::MockRequest.env_for("#{origin}#{URI(url).request_uri}", headers(origin, protocols, cookie)).tap do |env|
-        env["rack.hijack?"] = true
-        env["rack.hijack"] = -> { env["rack.hijack_io"] = io }
+    module Modern
+      def connect
+        @logger = @server.new_tagged_logger { request }
+        @connection = @server.config.connection_class.call.new(CableServer.new(@server, @clock), self)
+        @server.allow_request_origin?(env) ? opened : [ 404, {}, [] ]
       end
+
+      def receive(text)
+        work(self, :dispatch, text)
+      end
+
+      private
+
+      def opened
+        start
+        work(self, :handle_open)
+        [ -1, {}, [] ]
+      end
+
+      def handle_open
+        @connection.handle_open
+        @clock.keep_alive(self) if open?
+      end
+
+      def dispatch(text)
+        @connection.handle_incoming(ActiveSupport::JSON.decode(text)) if open?
+      rescue StandardError => error
+        logger.error "Could not handle incoming message: #{text.inspect} [#{error.class} - #{error.message}]"
+      end
+
+      def disconnect
+        work(@connection, :handle_close)
+      end
+    end
+
+    module Legacy
+      def connect
+        @logger = @server.logger
+        @connection = @server.config.connection_class.call.new(LegacyCableServer.new(@server, @clock, self), env)
+        @connection.instance_variable_set(:@websocket, LegacyWebSocket.new(self))
+        @connection.process
+      end
+
+      def receive(text)
+        @connection.on_message(text)
+      end
+
+      def accept
+        start
+        @connection.on_open
+        @clock.keep_alive(self) if open?
+        [ -1, {}, [] ]
+      end
+
+      private
+
+      def disconnect
+        @connection.on_close(nil, 1000)
+      end
+    end
+
+    attr_reader :env, :protocol, :logger
+
+    def self.env(url, protocols, cookie)
+      uri = URI(url)
+      origin = origin(uri)
+      Rack::MockRequest.env_for("#{origin}#{uri.request_uri}", headers(origin, protocols, cookie))
     end
 
     def self.origin(uri)
@@ -36,66 +92,90 @@ module RailsJsdom
       }
     end
 
-    def initialize(url, protocols, cookie, &on_frame)
-      server_io, @io = UNIXSocket.pair
-      status, = Rails.application.call(self.class.env(url, protocols, cookie, server_io))
-      raise Refused, "the cable endpoint answered #{status}" if status != -1
-
-      @protocol = handshake
-      @reader = Thread.new { read_frames(&on_frame) }
+    def initialize(id, outbox, clock)
+      @id = id
+      @outbox = outbox
+      @clock = clock
+      @state = :connecting
+      @jobs = []
     end
 
-    def send_text(text)
-      write(CableFrame::TEXT, text)
+    def open(url, protocols, cookie)
+      @protocol = (protocols & ActionCable::INTERNAL[:protocols]).first.to_s
+      status, = Rails.application.call(self.class.env(url, protocols, cookie).merge(ENV_KEY => self))
+      status == -1 ? { protocol: @protocol } : { error: "the cable endpoint answered #{status}" }
     end
 
-    def close
-      write(CableFrame::CLOSE, [ 1000 ].pack("n"))
-      @reader.join(HANDSHAKE_TIMEOUT)
-    ensure
-      @io.close
+    def attach(server, env)
+      @server = server
+      @env = env
+      connect
+    end
+
+    def request
+      @request ||= ActionDispatch::Request.new(Rails.application.env_config.merge(env))
+    end
+
+    def open?
+      @state == :open
+    end
+
+    def start
+      @state = :open
+    end
+
+    def transmit(cable_message)
+      deliver(ActiveSupport::JSON.encode(cable_message))
+    end
+
+    def deliver(text)
+      @outbox << { socket: @id, data: text } if open?
+    end
+
+    def close(*)
+      shut(1000) if open?
+    end
+
+    def close_by_page
+      shut(nil) if open?
+    end
+
+    def beat
+      @connection.beat
+    end
+
+    def perform_work(receiver, method, *args)
+      work(receiver, method, *args)
+    end
+
+    def work(receiver, method, *args, connection: self, &block)
+      @jobs << [ receiver, method, args, connection, block ]
+      run_jobs unless working?
     end
 
     private
 
-    def handshake
-      _status, *lines = read_head.split("\r\n")
-      header_values(lines).fetch("sec-websocket-protocol", "")
+    def working?
+      @working
     end
 
-    def header_values(lines)
-      lines.filter_map { |line| line.split(": ", 2) }.to_h { |name, value| [ name.downcase, value ] }
+    def shut(code)
+      @state = :closed
+      @clock.let_go(self)
+      @outbox << { socket: @id, closed: true, code: code } if code
+      disconnect
     end
 
-    def read_head
-      head = +""
-      head << read_byte until head.end_with?("\r\n\r\n")
-      head
-    end
-
-    def read_byte
-      @io.read(1) || raise(Refused, "the cable endpoint closed the connection")
-    end
-
-    def read_frames
-      code = 1006
-      loop do
-        opcode, payload = CableFrame.read(@io)
-        opcode == CableFrame::CLOSE ? code = acknowledge_close(payload) : yield(data: payload.force_encoding(Encoding::UTF_8))
+    def run_jobs
+      @working = true
+      while (job = @jobs.shift)
+        receiver, method, args, connection, block = job
+        @server.worker_pool.invoke(receiver, method, *args, connection: connection, &block)
       end
-    rescue IOError
-      yield closed: true, code: code
+    ensure
+      @working = false
     end
 
-    def acknowledge_close(payload)
-      write(CableFrame::CLOSE, payload)
-      payload.unpack1("n") || 1005
-    end
-
-    def write(opcode, payload)
-      @io.write(CableFrame.encode(opcode, payload))
-    rescue IOError, SystemCallError
-      nil
-    end
+    include({ socket: Modern, env: Legacy }.fetch(ActionCable::Connection::Base.instance_method(:initialize).parameters.dig(1, 1)))
   end
 end

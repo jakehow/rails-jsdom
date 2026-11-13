@@ -506,14 +506,19 @@ test("a form whose submit event is prevented does not submit", async () => {
   assert.equal(runner.requests.length, 0)
 })
 
-function cableServer(frames = []) {
+function cableServer(onSend = () => {}) {
   const sent = []
   runner.cable = request => {
     sent.push(request)
+    if (request.action === "send") onSend(request)
     if (request.action === "open") return request.url.includes("refused") ? { error: "refused" } : { protocol: "actioncable-v1-json" }
-    return request.action === "receive" ? frames.splice(0) : null
+    return null
   }
   return sent
+}
+
+function settleWith(frames) {
+  return runner.run({ command: "settle", sync: { epoch: 0, now: 0, deadline: null, frames } })
 }
 
 const SOCKET_PAGE = `<script>
@@ -534,22 +539,30 @@ test("a page WebSocket opens through Ruby with the URL, protocols and the protoc
   assert.deepEqual([opened.url, opened.protocols, await runner.evaluate("events")], ["ws://app.test/cable", ["actioncable-v1-json"], ["open", "onopen actioncable-v1-json 1"]])
 })
 
-test("a page WebSocket sends text through Ruby and receives its frames before timers run", async () => {
+test("a page WebSocket sends text through Ruby and receives the frames Ruby queued before timers run", async () => {
   const sent = cableServer()
   await runner.load(SOCKET_PAGE)
   const id = await runner.evaluate("socket.id")
-  cableServer([{ socket: 0, data: "lost" }, { socket: id, data: "hello" }]).push(...sent)
+  cableServer(() => runner.frames.push({ socket: 0, data: "lost" }, { socket: id, data: "hello" })).push(...sent)
   await runner.evaluate(`socket.send({ toString: () => "hi" }); setTimeout(() => events.push("timer"), 0)`)
 
   assert.deepEqual(await runner.evaluate("events.slice(2)"), ["message hello", "timer"])
+})
+
+test("frames Ruby queued between commands reach the page before the next action runs", async () => {
+  cableServer()
+  await runner.load(SOCKET_PAGE)
+  const id = await runner.evaluate("socket.id")
+  const result = await runner.run({ command: "evaluate", script: "events.slice(2)", sync: { epoch: 0, now: 0, deadline: null, frames: [{ socket: id, data: "queued" }] } })
+
+  assert.deepEqual(result, ["message queued"])
 })
 
 test("a page WebSocket the server closes reports the code and stops", async () => {
   cableServer()
   await runner.load(SOCKET_PAGE)
   const id = await runner.evaluate("socket.id")
-  cableServer([{ socket: id, closed: true, code: 1011 }, { socket: id, data: "late" }])
-  await runner.run({ command: "settle" })
+  await settleWith([{ socket: id, closed: true, code: 1011 }, { socket: id, data: "late" }])
 
   assert.deepEqual(await runner.evaluate("events.slice(2)"), ["close 1011 false 3"])
 })
@@ -563,11 +576,10 @@ test("closing a page WebSocket tells Ruby once, and messages after it are droppe
 })
 
 test("a page that closes its WebSocket as the server closes it gets one close event, from the server", async () => {
-  cableServer()
+  const sent = cableServer()
   await runner.load(SOCKET_PAGE.replace('events.push("message " + event.data)', '{ events.push("message " + event.data); socket.close() }'))
   const id = await runner.evaluate("socket.id")
-  const sent = cableServer([{ socket: id, data: "bye" }, { socket: id, closed: true, code: 1001 }])
-  await runner.run({ command: "settle" })
+  await settleWith([{ socket: id, data: "bye" }, { socket: id, closed: true, code: 1001 }])
 
   assert.deepEqual([sent.filter(request => request.action === "close").length, await runner.evaluate("events.slice(2)")], [1, ["message bye", "close 1001 false 3"]])
 })

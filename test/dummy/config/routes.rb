@@ -3,6 +3,7 @@ Rails.application.routes.draw do
   get "second", to: "pages#second"
   get "secret", to: "pages#secret"
   get "greeting", to: "pages#greeting"
+  get "now", to: "pages#now"
   get "broken", to: "pages#broken"
   get "forms", to: "pages#forms"
   get "echo", to: "pages#echo"

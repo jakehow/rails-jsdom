@@ -124,7 +124,6 @@ The install generator:
 5. Warns if your npm is older than 11.10, which ignores `min-release-age`.
 6. Runs `npm install`. Pass `--skip-npm` to run it yourself.
 7. Adds `/node_modules` to `.gitignore`.
-8. Warns if `config/cable.yml` does not use the `test` adapter in the test environment, which [Action Cable](#action-cable-and-turbo-stream-broadcasts) needs.
 
 Running it again changes nothing that is already set up.
 
@@ -249,26 +248,28 @@ test "a new comment appears for everyone watching the task" do
 end
 ```
 
-The page's `WebSocket` is the browser API, so `@rails/actioncable`, Turbo's `<turbo-cable-stream-source>` and your own consumers use it unchanged. Its connection is handed to `ActionCable.server` as a WebSocket upgrade carrying the test session's cookies, so your `ApplicationCable::Connection` identifies the user, and each channel runs its own `subscribed` (including `reject`), `stream_from`, `transmit` and actions. Broadcasts made before the page subscribed are not delivered, and a channel that rejects a subscription receives nothing. `broadcast_*_later` broadcasts arrive when the test performs the jobs.
+The page's `WebSocket` is the browser API, so `@rails/actioncable`, Turbo's `<turbo-cable-stream-source>` and your own consumers use it unchanged. Its connection goes through your app as a WebSocket upgrade carrying the test session's cookies, so middleware, routing, origin checks and your `ApplicationCable::Connection` run as in production: `connect` identifies the user or rejects the connection, and each channel runs its own `subscribed` (including `reject`), `stream_from`, `transmit`, actions and `periodically` timers. Broadcasts made before the page subscribed are not delivered, and a channel that rejects a subscription receives nothing. `broadcast_*_later` broadcasts arrive when the test performs the jobs.
 
-Server messages arrive on Action Cable's own threads, so settling also waits for them, in two ways:
+Action Cable runs in the test's thread, so nothing is left to chance:
 
-- **Replies the protocol requires** — the welcome after connecting, and the confirmation or rejection of each subscription — are waited for, up to `RailsJsdom.cable_reply_timeout` seconds (default 2).
-- **After the page performs an action or the app broadcasts**, settling waits until no message has arrived for `RailsJsdom.cable_quiet_period` seconds (default 0.05).
+- Every message the server sends — the welcome, the confirmation or rejection of a subscription, what an action transmits, and every broadcast to a stream the page subscribes to — is ready for the page before the call that caused it returns. A broadcast nobody subscribes to costs nothing.
+- The page receives the messages before its next timer runs.
+- Action Cable's heartbeat ping and channels' `periodically` timers run on the test's [virtual clock](#timers-and-settling).
 
-Messages that have arrived are delivered before the next page timer runs, so the page's virtual clock never gets ahead of a connection that is answering. A page whose script never stops, such as an endless loop, cannot answer. After `RailsJsdom.command_timeout` seconds (default 30) its Node process is stopped and the command fails with an error that says so; the next command starts a new process.
+For this, each `RailsJsdom::TestCase` puts its own pub/sub adapter on `ActionCable.server`, in place of the `test` adapter, and puts the previous one back after the test. It records broadcasts as the `test` adapter does, so `assert_broadcasts` and `assert_broadcast_on` keep working, and it delivers each one as it is made. A broadcast must come from the test, from a request the page makes, or from jobs the test performs with `perform_enqueued_jobs`. A broadcast from another thread is not delivered, and the next command fails with an error that says why.
 
-If messages arrive after an assertion on a slow machine, raise the quiet period in `test/test_helper.rb`:
-
-```ruby
-RailsJsdom.cable_quiet_period = 0.2
-```
-
-Your test environment must use the ActionCable `test` adapter (`config/cable.yml`: `test: adapter: test`), which is the Rails default and delivers broadcasts to subscribed channels as well as recording them.
+A page whose script never stops, such as an endless loop, cannot answer. After `RailsJsdom.command_timeout` seconds (default 30) its Node process is stopped and the command fails with an error that says so; the next command starts a new process.
 
 ## Timers and settling
 
 `setTimeout`, `setInterval` and `requestAnimationFrame` run on a virtual clock. After each action the runner keeps running due timers and waits for pending Rails requests until nothing is due within a one-second horizon. Timers further out — polling intervals, auto-dismissing flashes — stay pending, so pages never loop forever. A test does not need, and should not use, sleeps or waits.
+
+The clock is the test's clock, shared by Ruby and every page:
+
+- At the start of each test, Ruby's time is frozen with `travel_to`. The page's `Date` and `performance.now()` follow the virtual clock from that time.
+- When the page's clock moves, Ruby's time moves with it before Rails handles anything from the page, so timestamps the server writes agree with the page.
+- When the test moves time with `travel` or `travel_to`, the page's clock moves forward before the next command, running the timers due on the way in order. Moving back moves the page's `Date` back. A block `travel_to` ends at the time before it, as Rails does.
+- All sessions share the clock. A session's timers that fell due while another session ran run before its next command.
 
 ## Continuous integration
 

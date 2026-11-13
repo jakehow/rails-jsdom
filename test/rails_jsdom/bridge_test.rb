@@ -29,12 +29,27 @@ module RailsJsdom
       assert_equal({ "id" => "message" }, @bridge.call(command: "evaluate"))
     end
 
-    test "#call answers each fetch with the block's response" do
+    test "#call answers each fetch with the peer's answer and the sync that follows it" do
       input = StringIO.new
-      Open3.stubs(:popen3).returns(node(lines({ type: "result", value: {} }, { type: "fetch", id: 7, request: { "url" => "/a" } }, { type: "result", value: nil }), input: input))
-      @bridge.call(command: "click") { |request| { status: 200, url: request.fetch("url") } }
+      Open3.stubs(:popen3).returns(node(lines({ type: "result", value: {} }, { type: "fetch", id: 7, request: { "url" => "/a" }, clock: 0 }, { type: "result", value: nil, clock: 0 }), input: input))
+      @bridge.call({ command: "click" }, peer)
 
-      assert_equal({ "type" => "fetch_response", "id" => 7, "response" => { "status" => 200, "url" => "/a" } }, JSON.parse(input.string.lines.last))
+      assert_equal({ "type" => "fetch_response", "id" => 7, "response" => { "status" => 200, "url" => "/a" }, "sync" => { "frames" => [ "after /a" ] } }, JSON.parse(input.string.lines.last))
+    end
+
+    test "#call sends the peer's sync with the message" do
+      input = StringIO.new
+      Open3.stubs(:popen3).returns(node(lines({ type: "result", value: {} }, { type: "result", value: nil, clock: 0 }), input: input))
+      @bridge.call({ command: "click" }, peer)
+
+      assert_equal({ "command" => "click", "sync" => { "frames" => [] } }, JSON.parse(input.string.lines.last))
+    end
+
+    test "#call gives the peer the page clock of every message Node writes" do
+      Open3.stubs(:popen3).returns(node(lines({ type: "result", value: {} }, { type: "fetch", id: 7, request: { "url" => "/a" }, clock: 250 }, { type: "result", value: nil, clock: 900 })))
+      @bridge.call({ command: "click" }, recorder = peer)
+
+      assert_equal [ 250, 900 ], recorder.clocks
     end
 
     test "#call raises Node's error message" do
@@ -57,8 +72,10 @@ module RailsJsdom
     end
 
     test "#call stops Node when answering a fetch raises, so Node is never left waiting" do
-      Open3.stubs(:popen3).returns(node(lines({ type: "result", value: {} }, { type: "fetch", id: 7, request: {} })))
-      assert_raises(ArgumentError) { @bridge.call(command: "click") { raise ArgumentError } }
+      Open3.stubs(:popen3).returns(node(lines({ type: "result", value: {} }, { type: "fetch", id: 7, request: {}, clock: 0 })))
+      failing = peer
+      failing.define_singleton_method(:rails_jsdom_answer) { |_request| raise ArgumentError }
+      assert_raises(ArgumentError) { @bridge.call({ command: "click" }, failing) }
 
       assert_not @bridge.started?
     end
@@ -111,6 +128,20 @@ module RailsJsdom
     end
 
     private
+
+    def peer
+      Struct.new(:clocks, :answered) do
+        def rails_jsdom_sync
+          { frames: answered }
+        end
+        def rails_jsdom_page_clock(now)
+          clocks << now
+        end
+        def rails_jsdom_answer(request)
+          { status: 200, url: request.fetch("url") }.tap { answered << "after #{request.fetch("url")}" }
+        end
+      end.new([], [])
+    end
 
     def node(output, input: StringIO.new, error: "", process: nil)
       [ input, StringIO.new(output), StringIO.new(error), process ]

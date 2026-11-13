@@ -86,12 +86,12 @@ module RailsJsdom
     # Goes back one history entry: a Turbo Drive visit or a full page load.
     # Does nothing on the first page.
     def go_back
-      rails_jsdom_perform(command: "traverse", delta: -1)
+      rails_jsdom_call(command: "traverse", delta: -1)
     end
 
     # Goes forward one history entry after #go_back.
     def go_forward
-      rails_jsdom_perform(command: "traverse", delta: 1)
+      rails_jsdom_call(command: "traverse", delta: 1)
     end
 
     # Runs the block as another user, with its own cookies and its own page.
@@ -121,7 +121,7 @@ module RailsJsdom
     #
     #   mount_html %(<div data-controller="counter"></div>)
     def mount_html(html)
-      rails_jsdom_perform(command: "load", html: RailsJsdom.document(html), url: "http://#{host}/", history: "push")
+      rails_jsdom_call(command: "load", html: RailsJsdom.document(html), url: "http://#{host}/", history: "push")
     end
 
     # Answers the page's requests to `url` with the given response instead of
@@ -234,14 +234,14 @@ module RailsJsdom
     #
     #   select "Canada", from: "Country"
     def select(value, from: nil, match: nil)
-      rails_jsdom_perform(command: "select", option: value.to_s, from: from, selected: true, scope: rails_jsdom_scope, match: match)
+      rails_jsdom_call(command: "select", option: value.to_s, from: from, selected: true, scope: rails_jsdom_scope, match: match)
     end
 
     # Deselects the option `value` in a select that allows multiple options.
     #
     #   unselect "Red", from: "Colours"
     def unselect(value, from: nil, match: nil)
-      rails_jsdom_perform(command: "select", option: value.to_s, from: from, selected: false, scope: rails_jsdom_scope, match: match)
+      rails_jsdom_call(command: "select", option: value.to_s, from: from, selected: false, scope: rails_jsdom_scope, match: match)
     end
 
     # Puts the files at `paths` (one path or an array) in the file field found
@@ -287,7 +287,7 @@ module RailsJsdom
     #   find_field("Search").send_keys("mugs", :enter)
     #   send_keys [ :shift, :tab ]
     def send_keys(*keys)
-      rails_jsdom_perform(command: "send_keys", keys: RailsJsdom.keys(keys))
+      rails_jsdom_call(command: "send_keys", keys: RailsJsdom.keys(keys))
     end
 
     # Scopes every action, finder and assertion in the block to the one
@@ -633,9 +633,9 @@ module RailsJsdom
 
     def rails_jsdom_script(script, arguments, kind, receiver = nil) # :nodoc:
       if arguments.empty? && receiver.nil?
-        rails_jsdom_perform(command: "evaluate", script: script)
+        rails_jsdom_call(command: "evaluate", script: script)
       else
-        rails_jsdom_perform(command: "evaluate", script: script, kind: kind, receiver: receiver, args: arguments.map { |argument| rails_jsdom_script_value(argument) })
+        rails_jsdom_call(command: "evaluate", script: script, kind: kind, receiver: receiver, args: arguments.map { |argument| rails_jsdom_script_value(argument) })
       end
     end
 
@@ -644,24 +644,54 @@ module RailsJsdom
     end
 
     def rails_jsdom_element(handle, action, **options) # :nodoc:
-      rails_jsdom_perform(command: "element", handle: handle, action: action, **options)
+      rails_jsdom_call(command: "element", handle: handle, action: action, **options)
     end
 
     def rails_jsdom_read(handle) # :nodoc:
-      rails_jsdom_receive_cable
+      rails_jsdom_catch_up
       RailsJsdom.bridge.call(command: "read", handle: handle)
     end
 
     def rails_jsdom_page_snapshot # :nodoc:
-      rails_jsdom_receive_cable
+      rails_jsdom_catch_up
       RailsJsdom.bridge.call(command: "snapshot", scope: [])
+    end
+
+    def rails_jsdom_answer(request) # :nodoc:
+      request["kind"] == "cable" ? rails_jsdom_cable_answer(request) : rails_jsdom_http_answer(request)
+    end
+
+    def rails_jsdom_sync # :nodoc:
+      rails_jsdom_clock.view.merge(frames: rails_jsdom_cable.drain)
+    end
+
+    def rails_jsdom_page_clock(now) # :nodoc:
+      rails_jsdom_clock.page_time(now)
+    end
+
+    def rails_jsdom_clock # :nodoc:
+      @rails_jsdom_clock ||= Clock.new(Time.now) { |time| travel_to(time, with_usec: true) }
+    end
+
+    def rails_jsdom_take_over_pubsub # :nodoc:
+      @rails_jsdom_previous_pubsub = ActionCable.server.pubsub
+      @rails_jsdom_pubsub = CableAdapter.new(ActionCable.server)
+      ActionCable.server.instance_variable_set(:@pubsub, @rails_jsdom_pubsub)
+    end
+
+    def rails_jsdom_restore_pubsub # :nodoc:
+      ActionCable.server.instance_variable_set(:@pubsub, @rails_jsdom_previous_pubsub)
+    end
+
+    def rails_jsdom_close_cables # :nodoc:
+      (@rails_jsdom_cables || {}).each_value(&:close)
     end
 
     private
 
     def rails_jsdom_visit(path, history)
       rails_jsdom_request("GET", path, headers: {})
-      rails_jsdom_perform(command: "load", html: response.body, url: request.original_url, history: history)
+      rails_jsdom_call(command: "load", html: response.body, url: request.original_url, history: history)
     end
 
     def rails_jsdom_session_name
@@ -689,7 +719,7 @@ module RailsJsdom
     end
 
     def rails_jsdom_act(command, locator, match, **options)
-      rails_jsdom_perform(command: command, locator: locator, scope: rails_jsdom_scope, match: match, **options)
+      rails_jsdom_call(command: command, locator: locator, scope: rails_jsdom_scope, match: match, **options)
     end
 
     def rails_jsdom_files(paths)
@@ -704,7 +734,7 @@ module RailsJsdom
     end
 
     def rails_jsdom_matches(query)
-      rails_jsdom_receive_cable
+      rails_jsdom_catch_up
       query.filter(RailsJsdom.bridge.call(**query.message, scope: rails_jsdom_scope))
     end
 
@@ -749,7 +779,7 @@ module RailsJsdom
     end
 
     def rails_jsdom_snapshot
-      rails_jsdom_receive_cable
+      rails_jsdom_catch_up
       RailsJsdom.bridge.call(command: "snapshot", scope: rails_jsdom_scope)
     end
 
@@ -762,29 +792,25 @@ module RailsJsdom
       integration_session.cookies.for(URI("http://#{host}#{uri.path}"))
     end
 
-    def rails_jsdom_receive_cable
-      rails_jsdom_call(command: "settle") if rails_jsdom_cable.open?
+    def rails_jsdom_catch_up
+      if rails_jsdom_cable.active?
+        rails_jsdom_call(command: "settle")
+      elsif rails_jsdom_clock.moved? || rails_jsdom_refused_broadcast?
+        rails_jsdom_call(command: "catch_up")
+      end
+    end
+
+    def rails_jsdom_refused_broadcast?
+      !!@rails_jsdom_pubsub&.refused?
     end
 
     def rails_jsdom_cable
-      (@rails_jsdom_cables ||= {})[rails_jsdom_session_name] ||= Cable.new
-    end
-
-    def rails_jsdom_close_cables # :nodoc:
-      (@rails_jsdom_cables || {}).each_value(&:close)
-    end
-
-    def rails_jsdom_perform(**message)
-      rails_jsdom_receive_cable
-      rails_jsdom_call(message)
+      (@rails_jsdom_cables ||= {})[rails_jsdom_session_name] ||= Cable.new(rails_jsdom_clock)
     end
 
     def rails_jsdom_call(message)
-      RailsJsdom.bridge.call(message) { |fetch| rails_jsdom_fetch(fetch) }
-    end
-
-    def rails_jsdom_fetch(fetch)
-      fetch["kind"] == "cable" ? rails_jsdom_cable_answer(fetch) : rails_jsdom_http_answer(fetch)
+      @rails_jsdom_pubsub&.raise_refused
+      RailsJsdom.bridge.call(message, self)
     end
 
     def rails_jsdom_http_answer(fetch)

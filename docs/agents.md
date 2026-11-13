@@ -17,8 +17,7 @@ This page is for an AI coding agent working in a Rails app that uses, or is movi
    - creates `test/interactions/`;
    - adds `jsdom` and `esbuild` to `package.json` and runs `npm install`;
    - sets `min-release-age=7` in `.npmrc`;
-   - ignores `node_modules`;
-   - warns if `config/cable.yml` does not use the `test` adapter in the test environment.
+   - ignores `node_modules`.
 3. Make CI install the Node packages before the tests, with `npm ci` after setting up Node 22 or later.
 4. Commit `package.json`, `package-lock.json` and `.npmrc`.
 
@@ -45,7 +44,9 @@ end
 
 - Put the test in `test/interactions/` and subclass `RailsJsdom::TestCase`. It is an `ActionDispatch::IntegrationTest`, so fixtures, `perform_enqueued_jobs` and Rails assertions work.
 - Sign in the way the app's integration tests do, usually by posting to the session controller.
-- Every action settles the page before it returns: timers up to one second ahead have run, no request is pending, and Action Cable messages the page is waiting for have arrived. Never add `sleep`, waits or retries.
+- Every action settles the page before it returns: timers up to one second ahead have run, no request is pending, and every Action Cable message the server has sent has reached the page. Never add `sleep`, waits or retries.
+- Time is virtual and shared: Ruby's time is frozen at the start of the test, and the page's `Date` follows the page's clock. Use `travel` or `travel_to` to move time; the page catches up before the next command.
+- Broadcasts must come from the test, a page request or `perform_enqueued_jobs`. A broadcast from another thread fails the next command.
 - A JavaScript error, an unhandled promise rejection or an unexpected `alert`, `confirm` or `prompt` fails the action. CSS that jsdom cannot parse, such as nested rules, does not. Wrap actions that show a dialog in `accept_alert`, `accept_confirm`, `dismiss_confirm`, `accept_prompt` or `dismiss_prompt`.
 - `assert_selector` and `find` count only visible elements unless you pass `visible: false`. `assert_dom` and `assert_select` see every element.
 - Requests to other hosts fail like a network error. Answer them with `stub_fetch` after the page loads.
