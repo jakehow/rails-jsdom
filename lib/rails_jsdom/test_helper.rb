@@ -636,7 +636,7 @@ module RailsJsdom
 
     def rails_jsdom_visit(path, history)
       rails_jsdom_request("GET", path, headers: {})
-      rails_jsdom_perform(command: "load", html: response.body, url: request.url, history: history)
+      rails_jsdom_perform(command: "load", html: response.body, url: request.original_url, history: history)
     end
 
     def rails_jsdom_session_name
@@ -767,7 +767,7 @@ module RailsJsdom
     end
 
     def rails_jsdom_fetch_reply(redirected)
-      { status: response.status, headers: response.headers.to_h.except("set-cookie"), body: response.body, url: request.url, redirected: redirected }
+      { status: response.status, headers: response.headers.to_h.except("set-cookie"), body: response.body, url: request.original_url, redirected: redirected }
     end
 
     def rails_jsdom_request(method, path, headers:, params: nil)

@@ -7,6 +7,7 @@ require "propshaft"
 require "importmap-rails"
 require "turbo-rails"
 require "stimulus-rails"
+require_relative "../lib/numeric_prefix"
 
 module Dummy
   class Application < Rails::Application
@@ -17,6 +18,7 @@ module Dummy
     config.active_job.queue_adapter = :test
     config.action_controller.allow_forgery_protection = false
     config.action_dispatch.show_exceptions = :none
+    config.middleware.use NumericPrefix
     config.logger = Logger.new(File.expand_path("../log/test.log", __dir__))
   end
 end

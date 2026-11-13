@@ -32,7 +32,7 @@ While a command runs, the page may request URLs: its own `fetch` calls, link cli
 
 Ruby answers with `{ "type": "fetch_response", "id": 7, "response": { … } }`. The response is either:
 
-- `{ "status": 200, "headers": { … }, "body": "…", "url": "…", "redirected": false }`. Rails has followed redirects already; `url` is the final URL and `redirected` says whether there was one. For a page navigation, Node loads `body` as the new page at `url`.
+- `{ "status": 200, "headers": { … }, "body": "…", "url": "…", "redirected": false }`. Rails has followed redirects already; `url` is the URL Rails requested last (the requested URL, or the target of the last redirect), as the browser saw it before any middleware rewrote the path, and `redirected` says whether there was a redirect. For a page navigation, Node loads `body` as the new page at `url`.
 - `{ "error": "…" }` when Rails will not answer, for example a URL on another host. The page's `fetch` rejects with a `TypeError`; a page navigation fails the command.
 
 Requests from a page that has already been replaced are never sent.

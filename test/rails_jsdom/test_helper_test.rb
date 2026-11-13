@@ -13,7 +13,7 @@ module RailsJsdom
       RailsJsdom.stubs(:bridge).returns(bridge = streamless_bridge)
       @helper.stubs(:process)
       @helper.stubs(:response).returns(stub(redirect?: false, body: "<p>Hi</p>"))
-      @helper.stubs(:request).returns(stub(url: "http://www.example.com/hi"))
+      @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/hi"))
       bridge.expects(:call).with({ command: "load", html: "<p>Hi</p>", url: "http://www.example.com/hi", history: "push" })
 
       @helper.visit("/hi")
@@ -22,7 +22,7 @@ module RailsJsdom
     test "#visit requests the page from Rails" do
       RailsJsdom.stubs(:bridge).returns(streamless_bridge)
       @helper.stubs(:response).returns(stub(redirect?: false, body: ""))
-      @helper.stubs(:request).returns(stub(url: "http://www.example.com/hi"))
+      @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/hi"))
       @helper.expects(:process).with(:get, "/hi", params: nil, headers: {})
 
       @helper.visit("/hi")
@@ -32,7 +32,7 @@ module RailsJsdom
       RailsJsdom.stubs(:bridge).returns(streamless_bridge)
       @helper.stubs(:process)
       @helper.stubs(:response).returns(stub(redirect?: true), stub(redirect?: false, body: ""))
-      @helper.stubs(:request).returns(stub(url: "http://www.example.com/session/new"))
+      @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/session/new"))
       @helper.expects(:follow_redirect!).with(headers: {}).once
 
       @helper.visit("/dashboard")
@@ -163,7 +163,7 @@ module RailsJsdom
       bridge_answering(FETCH)
       @helper.stubs(:host).returns("www.example.com")
       @helper.stubs(:response).returns(stub(redirect?: false, status: 200, headers: {}, body: ""))
-      @helper.stubs(:request).returns(stub(url: "http://www.example.com/items"))
+      @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/items"))
       @helper.expects(:process).with(:post, "/items?page=2", params: "a=1", headers: FETCH.fetch("headers"))
 
       @helper.click("Save")
@@ -174,7 +174,7 @@ module RailsJsdom
       @helper.stubs(:host).returns("www.example.com")
       @helper.stubs(:process)
       @helper.stubs(:response).returns(stub(redirect?: false, status: 201, headers: { "content-type" => "text/html", "set-cookie" => "session=1" }, body: "<p>Saved</p>"))
-      @helper.stubs(:request).returns(stub(url: "http://www.example.com/items"))
+      @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/items"))
       @helper.click("Save")
 
       assert_equal [ { status: 201, headers: { "content-type" => "text/html" }, body: "<p>Saved</p>", url: "http://www.example.com/items", redirected: false } ], replies
@@ -185,7 +185,7 @@ module RailsJsdom
       @helper.stubs(:host).returns("www.example.com")
       @helper.stubs(:process)
       @helper.stubs(:response).returns(stub(redirect?: true), stub(redirect?: false, status: 200, headers: {}, body: ""))
-      @helper.stubs(:request).returns(stub(url: "http://www.example.com/items/1"))
+      @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/items/1"))
       @helper.expects(:follow_redirect!).with(headers: { "accept" => "text/html" }).once
 
       @helper.click("Save")
@@ -197,7 +197,7 @@ module RailsJsdom
       @helper.stubs(:process)
       @helper.stubs(:follow_redirect!)
       @helper.stubs(:response).returns(stub(redirect?: true), stub(redirect?: false, status: 200, headers: {}, body: ""))
-      @helper.stubs(:request).returns(stub(url: "http://www.example.com/items/1"))
+      @helper.stubs(:request).returns(stub(original_url: "http://www.example.com/items/1"))
       @helper.click("Save")
 
       assert_equal([ true ], replies.map { |reply| reply.fetch(:redirected) })
