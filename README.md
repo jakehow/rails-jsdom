@@ -55,7 +55,7 @@ end
 
 **What you gain**
 
-- **Speed.** No browser, no Capybara server, no Puma, no Chrome. A test is a Rails request plus a jsdom page. In [37signals' open-source apps](#results-on-37signals-open-source-apps), the same tests ran 1.8x to 15.6x faster than as system tests.
+- **Speed.** No browser, no Capybara server, no Puma, no Chrome. A test is a Rails request plus a jsdom page. In [37signals' open-source apps](#results-on-37signals-open-source-apps), the same tests ran 1.8x to 16.5x faster than as system tests.
 - **Determinism.** Timers run on a virtual clock that Ruby and the page share, Action Cable runs in the test's thread, and the runner waits for pending requests itself. There are no sleeps, waits or retries to tune, and a slow machine does not change what a test sees.
 - **Real code paths.** Real controllers, real views, real Stimulus controllers, real Turbo, real session — only the browser engine is replaced.
 - **Clear failures.** A JavaScript exception, an unhandled rejection or a dialog you did not expect fails the test instead of being swallowed by the browser.
@@ -98,7 +98,7 @@ To test rails-jsdom on real apps, we moved the system tests of three open-source
 
 | App | System tests | Moved to interaction tests | Still system tests | System tests (Chrome) | Interaction tests | Speedup |
 |---|---|---|---|---|---|---|
-| Campfire | 30 | 28 | 3 | 301.5s (26 tests) | 19.3s (28 tests) | 15.6x faster (94% less time) |
+| Campfire | 30 | 28 | 3 | 317.7s | 19.3s | 16.5x faster (94% less time) |
 | Fizzy | 47 | 18 | 29 | 21.5s | 9.6s | 2.2x faster (55% less time) |
 | Writebook | 3 | 3 | 0 | 6.8s | 3.7s | 1.8x faster (45% less time) |
 
@@ -110,7 +110,6 @@ How we measured:
 - Interaction tests ran on Node 26.13.1, jsdom 31.0.0 and Rails 8.2.0.alpha, the edge Rails the apps use.
 - Each time is the fastest of three runs.
 - The interaction times include starting Node and bundling the app's JavaScript once, about 1.4s.
-- For Campfire, the system time is for 26 tests and the interaction time is for 28. We timed the system tests before we moved the last 2 tests, the two that type an @mention, so we have no system time for those 2. The interaction time includes them, so Campfire's real speedup is a little higher than the table shows.
 
 Why the gains differ:
 
