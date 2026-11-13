@@ -188,6 +188,63 @@ test("a closed MessagePort neither sends nor receives", async () => {
   assert.deepEqual(result, [])
 })
 
+test("a pasted DataTransfer carries its data to a paste listener", async () => {
+  await runner.load(`<div id="editor" contenteditable="true"></div>`)
+  const result = await runner.evaluate(`(() => {
+    const data = new DataTransfer()
+    data.setData("Text", "first")
+    data.setData("text/plain", "plain")
+    data.setData("URL", "https://example.test/")
+    data.setData("text/html", "<b>html</b>")
+    data.clearData("text/html")
+    data.setDragImage()
+    const editor = document.getElementById("editor")
+    const seen = []
+    editor.addEventListener("paste", event => seen.push(event instanceof Event, event.clipboardData.getData("text"), event.clipboardData.getData("url"), event.clipboardData.getData("text/html")))
+    editor.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true }))
+    return [seen, data.dropEffect, data.effectAllowed, new ClipboardEvent("copy").clipboardData]
+  })()`)
+
+  assert.deepEqual(result, [[true, "plain", "https://example.test/", ""], "none", "all", null])
+})
+
+test("DataTransfer items hold strings and files, read strings as a task, and can be removed", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const data = new DataTransfer()
+    data.setData("text/plain", "plain")
+    data.items.add("link", "TEXT/URI-LIST")
+    data.items.add(new File(["f"], "a.txt", { type: "text/plain" }))
+    const seen = []
+    data.items[0].getAsString(text => seen.push(text))
+    data.items[0].getAsString()
+    data.items[2].getAsString(() => seen.push("file as string"))
+    const before = seen.length
+    await new Promise(resolve => setTimeout(resolve, 1))
+    const listed = [data.types, data.files.map(file => file.name), data.items.map(item => item.kind), data.items[0].getAsFile()]
+    data.items.remove(0)
+    const removed = data.types
+    data.clearData()
+    const cleared = data.types
+    data.items.clear()
+    return [before, seen, listed, removed, cleared, data.types]
+  })()`)
+
+  assert.deepEqual(result, [0, ["plain"], [["text/plain", "text/uri-list", "Files"], ["a.txt"], ["string", "string", "file"], null], ["text/uri-list", "Files"], ["Files"], []])
+})
+
+test("a Range has an empty bounding box and no client rects, as an element without layout does", async () => {
+  await runner.load("<p id=\"p\">Text</p>")
+  const result = await runner.evaluate(`(() => {
+    const range = document.createRange()
+    range.selectNodeContents(document.getElementById("p"))
+    const box = range.getBoundingClientRect()
+    return [box instanceof DOMRect, box.width, box.height, range.getClientRects().length]
+  })()`)
+
+  assert.deepEqual(result, [true, 0, 0, 0])
+})
+
 test("CSS.escape serialises identifiers as browsers do", async () => {
   await runner.load("<p>Page</p>")
   const result = await runner.evaluate(`["1a-b c", "-2", "-", "\\0\\u0001\u00e9_x"].map(value => CSS.escape(value))`)
@@ -205,11 +262,11 @@ test("jsdom still lacks the browser APIs the runtime adds", () => {
     ResizeObserver: window.ResizeObserver,
     clipboard: window.navigator.clipboard,
     scrollIntoView: window.Element.prototype.scrollIntoView,
-    elementScrollTo: window.Element.prototype.scrollTo,
-    elementScroll: window.Element.prototype.scroll,
-    elementScrollBy: window.Element.prototype.scrollBy,
+    elementScrollTo: window.Element.prototype.scrollTo, elementScroll: window.Element.prototype.scroll, elementScrollBy: window.Element.prototype.scrollBy,
     checkVisibility: window.Element.prototype.checkVisibility,
     MessageChannel: window.MessageChannel,
+    DataTransfer: window.DataTransfer, ClipboardEvent: window.ClipboardEvent,
+    rangeBoundingClientRect: window.Range.prototype.getBoundingClientRect, rangeClientRects: window.Range.prototype.getClientRects,
     show: dialog.show,
     showModal: dialog.showModal,
     close: dialog.close,
