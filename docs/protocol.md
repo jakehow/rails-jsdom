@@ -37,6 +37,15 @@ Ruby answers with `{ "type": "fetch_response", "id": 7, "response": { … } }`. 
 
 Requests from a page that has already been replaced are never sent.
 
+A page's WebSocket uses the same `fetch` message with `request.kind` set to `"cable"`, and Ruby answers it the same way:
+
+| `request.action` | Other fields | Ruby's answer |
+| --- | --- | --- |
+| `"open"` | `socket` (an id), `url` (`ws:` or `wss:`), `protocols` | `{ "protocol": "…" }`, the subprotocol Action Cable chose, or `{ "error": "…" }` when the connection is refused |
+| `"send"` | `socket`, `data` (text) | `null` |
+| `"close"` | `socket` | `null` |
+| `"receive"` | none | The messages that have arrived for the session's sockets: `{ "socket", "data" }`, or `{ "socket", "closed": true, "code" }`. Ruby waits for replies the Action Cable protocol requires and for a quiet period after activity before answering. |
+
 ## Commands
 
 Every command is an object with a `command` field. Fields marked *scope*, *locator* and *match* are described under [Finding elements](#finding-elements).
@@ -51,7 +60,6 @@ Reads answer at once and do not change the page.
 | `snapshot` | *scope* | `{ html, text, url, title }`: the HTML and visible text of the page or scope, and the page's URL and title |
 | `query` | `strategy` (`"css"`, `"field"`, `"button"` or `"link"`), `locator` (or `null` for every element of that kind), *scope* | An array of [element descriptions](#element-descriptions) |
 | `read` | `handle` | One element description |
-| `streams` | none | `{ channel, name }` for each `<turbo-cable-stream-source>` on the page: its `channel` attribute (or `null`) and signed stream name |
 | `stub_fetch` | `url` (full URL, or path and query), `response` | `null`. Later page requests to that URL get `response` without asking Rails, until the next `load`. |
 | `expect_modal` | `type` (`"alert"`, `"confirm"` or `"prompt"`), `accept`, `with` (prompt answer or `null`) | `null`. Dialogs of that type are answered until `modal_messages`. |
 | `modal_messages` | none | The messages of the dialogs shown since `expect_modal`. Stops expecting dialogs. |
@@ -84,8 +92,7 @@ An action fails if the page threw an error, rejected a promise, showed an unexpe
 | `element` | `handle`, `action`, `value` (for `set`), `keys` (for `send_keys`) | Runs `click`, `hover`, `double_click`, `right_click`, `set`, `select_option`, `unselect_option` or `send_keys` on that element |
 | `traverse` | `delta` (`-1` or `1`) | Goes back or forward through Turbo history entries, then through full page loads |
 | `evaluate` | `script`, optional `kind` (`"expression"` or `"statements"`), `receiver` (a handle or `null`) and `args` (an element arrives for `{ "rails_jsdom_element": handle }`) | Runs the script in the page. Result: its value, awaited if it is a promise. |
-| `deliver` | `messages` | Renders each Turbo Stream message with `Turbo.renderStreamMessage` |
-| `confirm` | `names` | Marks the stream sources with these signed stream names `connected` |
+| `settle` | none | Settles the page, delivering Action Cable messages that have arrived |
 
 ## Setup
 

@@ -60,20 +60,20 @@ class BroadcastInteractionTest < RailsJsdom::TestCase
     assert_dom "#list p", text: "Late subscriber"
   end
 
-  test "a stream source for another channel is verified by that channel and receives its broadcasts" do
+  test "a stream source for an app channel receives what that channel streams" do
     mount_html stream_page(RoomChannel.signed_stream_name("room"), channel: "RoomChannel")
     Turbo::StreamsChannel.broadcast_append_to("room", target: "list", html: "<p>Room message</p>")
 
     assert_dom "#list p", text: "Room message"
   end
 
-  test "a stream source is marked connected once its stream is verified" do
+  test "Turbo marks a stream source connected once its subscription is confirmed, and a rejected one not" do
     mount_html stream_page(Turbo::StreamsChannel.signed_stream_name("rails_jsdom")) + stream_source("forged--signature")
 
     assert_selector "turbo-cable-stream-source[connected]", count: 1, visible: false
   end
 
-  test "a stream source for a channel that cannot verify stream names, or no such channel, receives nothing" do
+  test "a stream source for a channel that streams nothing, or no such channel, receives nothing" do
     signed_name = Turbo::StreamsChannel.signed_stream_name("rails_jsdom")
     mount_html "#{stream_source(signed_name, channel: "ChatChannel")}#{stream_source(signed_name, channel: "MissingChannel")}<div id='list'></div>"
     Turbo::StreamsChannel.broadcast_append_to("rails_jsdom", target: "list", html: "<p>Delivered</p>")

@@ -67,13 +67,13 @@ test("a new load after going back drops the forward entries", async () => {
 test("each session keeps its own page and history", async () => {
   await runner.load(`<p>Default</p>`)
   await session("other")
-  const empty = await runner.run({ command: "streams" })
+  const empty = await runner.snapshot().then(() => "page", () => "none")
   await runner.load(`<p>Other</p>`, `${HOST}/other`)
   await session("default")
   const defaultPage = await runner.snapshot()
   await session("other")
 
-  assert.deepEqual([empty, defaultPage.text, (await runner.snapshot()).text], [[], "Default", "Other"])
+  assert.deepEqual([empty, defaultPage.text, (await runner.snapshot()).text], ["none", "Default", "Other"])
 })
 
 test("reset leaves only an empty default session", async () => {

@@ -450,31 +450,102 @@ test("a form whose submit event is prevented does not submit", async () => {
   assert.equal(runner.requests.length, 0)
 })
 
-test("delivered Turbo Stream messages go to Turbo", async () => {
+function cableServer(frames = []) {
+  const sent = []
+  runner.cable = request => {
+    sent.push(request)
+    if (request.action === "open") return request.url.includes("refused") ? { error: "refused" } : { protocol: "actioncable-v1-json" }
+    return request.action === "receive" ? frames.splice(0) : null
+  }
+  return sent
+}
+
+const SOCKET_PAGE = `<script>
+  window.events = []
+  const socket = window.socket = new WebSocket("/cable", ["actioncable-v1-json"])
+  socket.onopen = () => events.push("onopen " + socket.protocol + " " + socket.readyState)
+  socket.addEventListener("open", () => events.push("open"))
+  socket.onmessage = event => events.push("message " + event.data)
+  socket.onerror = () => events.push("error")
+  socket.onclose = event => events.push("close " + event.code + " " + event.wasClean + " " + socket.readyState)
+</script>`
+
+test("a page WebSocket opens through Ruby with the URL, protocols and the protocol Ruby chose", async () => {
+  const sent = cableServer()
+  await runner.load(SOCKET_PAGE)
+  const opened = sent.find(request => request.action === "open")
+
+  assert.deepEqual([opened.url, opened.protocols, await runner.evaluate("events")], ["ws://app.test/cable", ["actioncable-v1-json"], ["open", "onopen actioncable-v1-json 1"]])
+})
+
+test("a page WebSocket sends text through Ruby and receives its frames before timers run", async () => {
+  const sent = cableServer()
+  await runner.load(SOCKET_PAGE)
+  const id = await runner.evaluate("socket.id")
+  cableServer([{ socket: 0, data: "lost" }, { socket: id, data: "hello" }]).push(...sent)
+  await runner.evaluate(`socket.send({ toString: () => "hi" }); setTimeout(() => events.push("timer"), 0)`)
+
+  assert.deepEqual(await runner.evaluate("events.slice(2)"), ["message hello", "timer"])
+})
+
+test("a page WebSocket the server closes reports the code and stops", async () => {
+  cableServer()
+  await runner.load(SOCKET_PAGE)
+  const id = await runner.evaluate("socket.id")
+  cableServer([{ socket: id, closed: true, code: 1011 }, { socket: id, data: "late" }])
+  await runner.run({ command: "settle" })
+
+  assert.deepEqual(await runner.evaluate("events.slice(2)"), ["close 1011 false 3"])
+})
+
+test("closing a page WebSocket tells Ruby once, and messages after it are dropped", async () => {
+  const sent = cableServer()
+  await runner.load(SOCKET_PAGE)
+  await runner.evaluate("socket.close(); socket.close(); socket.received('late')")
+
+  assert.deepEqual([sent.filter(request => request.action === "close").length, await runner.evaluate("events.slice(2)")], [1, ["close 1000 true 3"]])
+})
+
+test("a page that closes its WebSocket as the server closes it gets one close event, from the server", async () => {
+  cableServer()
+  await runner.load(SOCKET_PAGE.replace('events.push("message " + event.data)', '{ events.push("message " + event.data); socket.close() }'))
+  const id = await runner.evaluate("socket.id")
+  const sent = cableServer([{ socket: id, data: "bye" }, { socket: id, closed: true, code: 1001 }])
+  await runner.run({ command: "settle" })
+
+  assert.deepEqual([sent.filter(request => request.action === "close").length, await runner.evaluate("events.slice(2)")], [1, ["message bye", "close 1001 false 3"]])
+})
+
+test("sending on a WebSocket that is not open fails, and a reply after closing is ignored", async () => {
+  cableServer()
   await runner.load("<p>Page</p>")
-  await runner.run({ command: "deliver", messages: ["<p>One</p>", "<p>Two</p>"] })
+  const result = await runner.evaluate(`(() => {
+    const socket = new WebSocket("/cable")
+    let error = null
+    try { socket.send("early") } catch (caught) { error = caught.name }
+    socket.close()
+    return [error, socket.readyState, WebSocket.OPEN]
+  })()`)
 
-  assert.equal((await runner.snapshot()).text, "Page One Two")
+  assert.deepEqual([...result, await runner.evaluate("document.title")], ["InvalidStateError", 2, 1, "Page"])
 })
 
-test("stream sources list their channel and signed stream name", async () => {
-  await runner.load(`
-    <turbo-cable-stream-source channel="Turbo::StreamsChannel" signed-stream-name="a"></turbo-cable-stream-source>
-    <turbo-cable-stream-source signed-stream-name="b"></turbo-cable-stream-source>
-    <turbo-cable-stream-source channel="ChatChannel" signed-stream-name="c"></turbo-cable-stream-source>`)
+test("a WebSocket Ruby refuses reports an error, then closes", async () => {
+  cableServer()
+  await runner.load(SOCKET_PAGE.replace('"/cable"', '"/refused"'))
 
-  assert.deepEqual(await runner.run({ command: "streams" }), [{ channel: "Turbo::StreamsChannel", name: "a" }, { channel: null, name: "b" }, { channel: "ChatChannel", name: "c" }])
+  assert.deepEqual(await runner.evaluate("events"), ["error", "close 1006 false 3"])
 })
 
-test("confirmed stream sources are marked connected, as Turbo marks a confirmed subscription", async () => {
-  await runner.load(`
-    <turbo-cable-stream-source signed-stream-name="a"></turbo-cable-stream-source>
-    <turbo-cable-stream-source signed-stream-name="b" connected="was"></turbo-cable-stream-source>
-    <turbo-cable-stream-source signed-stream-name="c"></turbo-cable-stream-source>`)
-  await runner.run({ command: "confirm", names: ["a", "b"] })
-  const result = await runner.evaluate(`[...document.querySelectorAll("turbo-cable-stream-source")].map(source => source.getAttribute("connected"))`)
+test("leaving a page closes its WebSockets through Ruby, and a reset closes them without Ruby", async () => {
+  const sent = cableServer()
+  await runner.load(SOCKET_PAGE)
+  await runner.load("<p>Next</p>", `${HOST}/next`)
+  const closes = sent.filter(request => request.action === "close").length
+  await runner.load(SOCKET_PAGE)
+  await runner.run({ command: "reset" })
 
-  assert.deepEqual(result, ["", "was", null])
+  assert.deepEqual([closes, sent.filter(request => request.action === "close").length], [1, 1])
 })
 
 const FORM_ASSOCIATED = `<script>

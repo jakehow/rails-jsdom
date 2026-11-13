@@ -8,6 +8,7 @@ const { start } = require("../../lib/rails_jsdom/runtime.js")
 
 const APP = path.join(__dirname, "fixtures", "app")
 const HOST = "http://app.test"
+const NO_CABLE = request => (request.action === "receive" ? [] : null)
 
 const SETUP = {
   command: "setup",
@@ -44,6 +45,7 @@ function fakeProcess() {
 }
 
 function answerFetch(runner, message) {
+  if (message.request.kind === "cable") return runner.reply(message.id, runner.cable(message.request))
   runner.requests.push(message.request)
   const route = runner.routes[`${message.request.method} ${message.request.url}`]
   if (route === "hold") runner.held.push(message)
@@ -69,7 +71,7 @@ function client(io) {
     requests: [],
     held: [],
     routes: {},
-    logged: () => io.logged,
+    cable: NO_CABLE, logged: () => io.logged,
     send: message => io.stdin.write(`${JSON.stringify(message)}\n`),
     call: message => new Promise(resolve => {
       runner.waiting.push(resolve)
@@ -101,6 +103,7 @@ async function clear(runner) {
   runner.requests.length = 0
   runner.held.length = 0
   runner.routes = {}
+  runner.cable = NO_CABLE
 }
 
 module.exports = { HOST, SETUP, bodyText, connect, document, html, prepare, clear }

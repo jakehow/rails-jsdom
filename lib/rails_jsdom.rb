@@ -19,8 +19,25 @@ module RailsJsdom
   REMOTE = %r{\A[a-z][a-z0-9+.-]*://}i
   HIDDEN_SELECTOR = "[hidden], template, script, style, noscript, dialog:not([open]), [style*='display: none'], [style*='display:none']".freeze
   TIMER_HORIZON = 1000
+  CABLE_QUIET_PERIOD = 0.05
+  CABLE_REPLY_TIMEOUT = 2
 
   class << self
+    attr_writer :cable_quiet_period, :cable_reply_timeout
+
+    # Seconds to wait for more cable messages after the page performs an
+    # Action Cable action or the app broadcasts, before the page counts as
+    # settled. Raise it if messages arrive after assertions on a slow machine.
+    def cable_quiet_period
+      @cable_quiet_period || CABLE_QUIET_PERIOD
+    end
+
+    # Seconds to wait for a reply the Action Cable protocol requires, such as
+    # the welcome after connecting or the confirmation of a subscription.
+    def cable_reply_timeout
+      @cable_reply_timeout || CABLE_REPLY_TIMEOUT
+    end
+
     def bridge
       bridges[Process.pid] ||= Bridge.new(command: [ "node", RUNNER ], setup: setup, logger: Rails.logger)
     end
@@ -50,11 +67,6 @@ module RailsJsdom
       Rails.application.importmap.directories.values.to_h { |directory| [ directory.under, Rails.root.join(directory.dir).to_s ] }
     end
 
-    def verified_stream(channel, signed_name)
-      channel_class = channel.present? ? channel.safe_constantize : Turbo::StreamsChannel
-      channel_class.verified_stream_name(signed_name) if channel_class.respond_to?(:verified_stream_name)
-    end
-
     def keys(keys)
       keys.map { |key| key.is_a?(Array) ? key_entry(key.last).merge(modifiers: key[0...-1].map(&:to_s)) : key_entry(key) }
     end
@@ -81,7 +93,9 @@ end
 
 require_relative "rails_jsdom/bridge"
 require_relative "rails_jsdom/query"
-require_relative "rails_jsdom/turbo_stream_deliveries"
+require_relative "rails_jsdom/cable_frame"
+require_relative "rails_jsdom/cable_socket"
+require_relative "rails_jsdom/cable"
 require_relative "rails_jsdom/element"
 require_relative "rails_jsdom/test_helper"
 require_relative "rails_jsdom/page"
