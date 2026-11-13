@@ -95,6 +95,10 @@ module RailsJsdom
       assert_match(/npm 11.9.0 ignores min-release-age/, run_generator(%w[--skip-npm]))
     end
 
+    test "says nothing about Action Cable's adapter, because each test installs its own" do
+      assert_no_match(/cable|adapter/i, run_generator(%w[--skip-npm]))
+    end
+
     test "says nothing about npm when it holds back new releases" do
       assert_no_match(/ignores min-release-age/, run_generator(%w[--skip-npm]))
     end

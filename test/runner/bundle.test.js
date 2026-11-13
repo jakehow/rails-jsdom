@@ -36,6 +36,13 @@ test("a controller added to the page later connects", async () => {
   assert.equal((await runner.snapshot()).text, "Hello, Ada from tiny Hello, Ada from tiny")
 })
 
+test("an element already on the page that gains a data-controller connects", async () => {
+  await runner.load(`<p id="host"></p>`)
+  await runner.evaluate(`document.getElementById("host").setAttribute("data-controller", "hello")`)
+
+  assert.equal((await runner.snapshot()).text, "Hello, Ada from tiny")
+})
+
 test("a dynamic import of a module the importmap lacks fails only when it runs", async () => {
   await runner.load(`<p data-controller="lazy"></p>`)
 

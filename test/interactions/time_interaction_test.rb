@@ -92,7 +92,14 @@ class TimeInteractionTest < RailsJsdom::TestCase
   test "a broadcast from another thread fails the next read with an explanation" do
     Thread.new { Turbo::StreamsChannel.broadcast_append_to("rails_jsdom", target: "list", html: "<p>Late</p>") }.join
 
-    assert_raises(RailsJsdom::Error) { page_text }
+    assert_match(/broadcast from a thread other than the test's/, assert_raises(RailsJsdom::Error) { page_text }.message)
+  end
+
+  test "a read after the test travels sees what the page's timers did on the way, with no cable open" do
+    execute_script("setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<p id=\"late\">Late</p>'), 5000)")
+    travel 6.seconds, with_usec: true
+
+    assert_selector "#late", text: "Late"
   end
 
   private

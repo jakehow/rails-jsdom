@@ -85,6 +85,14 @@ test("reset leaves only an empty default session", async () => {
   await assert.rejects(runner.snapshot(), /visit a page or mount a partial first/)
 })
 
+test("reset clears local and session storage, so nothing leaks into the next test", async () => {
+  await runner.load(`<script>localStorage.setItem("draft", "Hello"); sessionStorage.setItem("tab", "1")</script>`)
+  await runner.run({ command: "reset" })
+  await runner.load(`<p>Next test</p>`)
+
+  assert.deepEqual(await runner.evaluate(`[localStorage.length, sessionStorage.length]`), [0, 0])
+})
+
 test("local and session storage last across page loads in a session, as in one browser tab, and not into another session", async () => {
   await runner.load(`<script>localStorage.setItem("draft", "Hello"); sessionStorage.setItem("tab", "1")</script>`)
   await runner.load(`<p>Next</p>`, `${HOST}/next`)

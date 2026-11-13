@@ -703,7 +703,7 @@ test("a page that keeps measuring layout in one turn of its event loop fails wit
   </script>`
   await runner.load(loop)
 
-  await assert.rejects(runner.evaluate("menu.append(document.createElement('span'))"), /measured element positions 10000 times without its event loop moving on\. jsdom has no layout/)
+  await assert.rejects(runner.evaluate("menu.append(document.createElement('span'))"), /measured element positions 10000 times without its event loop moving on\. jsdom has no layout.*stub_layout/s)
 })
 
 test("measuring layout again in later turns of the event loop is fine", async () => {

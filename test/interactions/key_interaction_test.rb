@@ -145,4 +145,12 @@ class KeyInteractionTest < RailsJsdom::TestCase
   test "an unknown modifier fails" do
     assert_raises(RailsJsdom::Error) { find_field("Query").send_keys([ :hyper, "a" ]) }
   end
+
+  test "Selenium's names for the arrow keys and return work as in system tests" do
+    find_field("Volume").send_keys(:arrow_up)
+    volume = find_field("Volume").value
+    find_field("Query").send_keys("mugs", :return)
+
+    assert_equal [ "6", "http://www.example.com/echo?query=mugs" ], [ volume, current_url ]
+  end
 end

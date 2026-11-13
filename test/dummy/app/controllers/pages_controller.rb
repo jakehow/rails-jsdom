@@ -28,6 +28,10 @@ class PagesController < ApplicationController
     raise "Broken endpoint"
   end
 
+  def body
+    render json: { body: request.raw_post, type: request.content_type }
+  end
+
   def now
     render json: { now: Time.now.to_r.to_s }
   end
