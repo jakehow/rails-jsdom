@@ -428,3 +428,10 @@ test("evaluate with a kind runs the script as a function, with its arguments, re
 
   assert.deepEqual([value, statements], ["p!true", "yes"])
 })
+
+test("an evaluated promise that waits on a timer and an animation frame resolves, because the clock runs while it waits", async () => {
+  await runner.load("<p>Page</p>")
+  const value = await runner.evaluate(`new Promise(resolve => setTimeout(() => requestAnimationFrame(() => resolve("late")), 50))`)
+
+  assert.equal(value, "late")
+})
