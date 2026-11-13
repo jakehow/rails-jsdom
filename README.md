@@ -234,7 +234,7 @@ end
 CI needs Node and your app's npm packages before the tests run:
 
 ```yaml
-- uses: actions/setup-node@v4
+- uses: actions/setup-node@v7
   with:
     node-version: 26
 - run: npm ci
