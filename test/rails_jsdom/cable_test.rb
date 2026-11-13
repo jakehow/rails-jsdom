@@ -1,4 +1,5 @@
 require "test_helper"
+require "websocket/driver"
 
 module RailsJsdom
   class CableTest < ActiveSupport::TestCase
@@ -129,6 +130,14 @@ module RailsJsdom
 
     test "the upgrade passes through the app middleware before it reaches Action Cable" do
       assert_equal({ protocol: "actioncable-v1-json" }, open_socket(url: "ws://www.example.com/42/cable"))
+    end
+
+    test "a page connection builds no WebSocket driver, because the page's socket is in process" do
+      GC.disable
+
+      assert_no_difference(-> { ObjectSpace.each_object(::WebSocket::Driver).count }) { open_socket }
+    ensure
+      GC.enable
     end
 
     test "a request that is not from a page socket reaches Action Cable unchanged" do

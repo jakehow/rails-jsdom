@@ -57,6 +57,13 @@ module RailsJsdom
   end
 
   class LegacyWebSocket # :nodoc:
+    module Takeover
+      def new(env, *arguments, **options)
+        socket = env[CableSocket::ENV_KEY]
+        socket ? LegacyWebSocket.new(socket) : super
+      end
+    end
+
     delegate :protocol, :close, to: :@socket
 
     def initialize(socket)

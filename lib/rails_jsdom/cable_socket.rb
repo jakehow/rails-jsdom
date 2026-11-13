@@ -46,10 +46,13 @@ module RailsJsdom
     end
 
     module Legacy
+      def self.included(_socket_class)
+        ActionCable::Connection::WebSocket.singleton_class.prepend(LegacyWebSocket::Takeover)
+      end
+
       def connect
         @logger = @server.logger
         @connection = @server.config.connection_class.call.new(LegacyCableServer.new(@server, @clock, self), env)
-        @connection.instance_variable_set(:@websocket, LegacyWebSocket.new(self))
         @connection.singleton_class.prepend(LegacyRescue)
         @connection.process
       end
