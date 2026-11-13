@@ -98,7 +98,7 @@ To test rails-jsdom on real apps, we moved the system tests of three open-source
 
 | App | System tests | Moved to interaction tests | Still system tests | System tests (Chrome) | Interaction tests | Speedup |
 |---|---|---|---|---|---|---|
-| Campfire | 30 | 28 | 3 | 301.5s for 26 of the 28 | 19.3s for all 28 | 15.6x faster (94% less time) |
+| Campfire | 30 | 28 | 3 | 301.5s (26 tests) | 19.3s (28 tests) | 15.6x faster (94% less time) |
 | Fizzy | 47 | 18 | 29 | 21.5s | 9.6s | 2.2x faster (55% less time) |
 | Writebook | 3 | 3 | 0 | 6.8s | 3.7s | 1.8x faster (45% less time) |
 
@@ -110,7 +110,7 @@ How we measured:
 - Interaction tests ran on Node 26.13.1, jsdom 31.0.0 and Rails 8.2.0.alpha, the edge Rails the apps use.
 - Each time is the fastest of three runs.
 - The interaction times include starting Node and bundling the app's JavaScript once, about 1.4s.
-- Campfire's system time covers 26 tests. The other 2 moved later, with `stub_layout`, so they are in the interaction time only.
+- For Campfire, the system time is for 26 tests and the interaction time is for 28. We timed the system tests before we moved the last 2 tests, the two that type an @mention, so we have no system time for those 2. The interaction time includes them, so Campfire's real speedup is a little higher than the table shows.
 
 Why the gains differ:
 
