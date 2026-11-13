@@ -3,7 +3,7 @@
 const js = require("@eslint/js")
 const noComments = require("./eslint/no-comments")
 
-const node = { require: "readonly", module: "writable", __dirname: "readonly", process: "readonly", Buffer: "readonly", console: "readonly", setTimeout: "readonly", Headers: "readonly", Request: "readonly", Response: "readonly", structuredClone: "readonly" }
+const node = { require: "readonly", setImmediate: "readonly", module: "writable", __dirname: "readonly", process: "readonly", Buffer: "readonly", console: "readonly", setTimeout: "readonly", Headers: "readonly", Request: "readonly", Response: "readonly", structuredClone: "readonly" }
 const browser = { window: "readonly", document: "readonly", fetch: "readonly" }
 
 module.exports = [
