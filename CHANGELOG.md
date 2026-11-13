@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.2.0 (2026-11-14)
+
+### Breaking changes
+
+- Requires Rails 8.1 or later (Action Cable and Action Pack 8.1). Earlier versions are end of life.
+- Requires jsdom 31 and Node.js 22.22.2+, 24.15+ or 26+. The installer now adds `jsdom` `^31.0.0`; change `package.json` in apps installed with 0.1.0.
+- Ruby's time is frozen at the start of each interaction test, and pages share that clock. Code that reads the real time during a test now sees the test's clock.
+- An error in connection or channel code that no `rescue_from` handles now fails the test.
+- A broadcast from a thread other than the test's now fails the test.
+- The installer no longer checks the test environment's Action Cable adapter. Each test installs its own.
+
+### Added
+
+- Your importmap's `application` module runs on every page, as in a browser, so its initializers and globals are there.
+- Controllers register on your app's `window.Stimulus` when it sets one, and connect after the page's scripts, one per task, in file order, as with `stimulus-loading`.
+- Action Cable over the page's own `WebSocket`, in process. The connection goes through your app with the test session's cookies, and your connection and channels run as in production, including `periodically`, `rescue_from`, `unsubscribed` and remote disconnects.
+- Action Cable is deterministic: every message is ready before the call that caused it returns, and `assert_broadcasts` and `assert_broadcast_on` keep working.
+- One virtual clock for Ruby and every page. The page's `Date` and `performance.now()` follow it, `travel` and `travel_to` move the pages, and Action Cable's heartbeat and `periodically` timers run on it.
+- `XMLHttpRequest` answered by Rails, including upload progress and `Blob` bodies, so Active Storage direct uploads work.
+- `attach_file` with a block answers a file chooser that a script opens.
+- Typing into a contenteditable with `send_keys`, through `beforeinput` and `input` at the caret.
+- `localStorage` and `sessionStorage` last across page loads in a session.
+- `stub_layout`, which gives the elements a test needs a box instead of 0x0.
+- A page that waits forever for a real measurement fails with an error that says so and suggests `stub_layout`.
+- `RailsJsdom.command_timeout` (default 30 seconds): a page that never answers fails the command instead of hanging.
+- As in system tests: `id:` and `class:` filters, finders without a selector, `click_on`, `click_link` and `click_button` without a locator, buttons found by `name`, Selenium's key names (`:arrow_down`, `:return` and the rest), and arguments to `evaluate_script` and `execute_script`, also on an element.
+- `wait:` and `make_visible:` raise an error that says to remove them.
+- Browser APIs for controllers: form-associated custom elements, `DataTransfer` and `ClipboardEvent`, `Range` client rects, the Fullscreen API, element scrolling, `checkVisibility` and `MessageChannel`. The page behaves as a desktop browser without touch.
+- Instructions for coding agents and the runtime protocol, published as Markdown.
+- [Results on 37signals' open-source apps](docs/reference_apps.md): the same tests ran 1.8x to 16.5x faster than as system tests.
+- CI also runs against edge Rails.
+
+### Changed
+
+- Pages settle faster.
+- A stylesheet that jsdom cannot parse no longer fails the page.
+- The page's URL is the URL that was requested, even when middleware rewrites the path into `SCRIPT_NAME`.
+- Stylesheet `<link>` elements and images fire `load` without being fetched, so Turbo merges a new page's head.
+- A dynamic `import()` of a module your importmap does not pin fails when the page runs it, as in a browser, instead of failing the bundle.
+
+### Fixed
+
+- Turbo Frames load. They needed `CSS.escape` (#1), which jsdom 31 now provides.
+- The installer works when npm prints warnings with its version.
+- Backspace after a line break in a contenteditable deletes the typed text.
+
 ## 0.1.0 (2026-11-12)
 
 - First release.
