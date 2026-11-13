@@ -3,7 +3,7 @@ require "test_helper"
 module RailsJsdom
   class ClockTest < ActiveSupport::TestCase
     setup do
-      @epoch = Time.now
+      @epoch = Time.at(Rational(1_700_000_000_250, 1000))
       @clock = Clock.new(@epoch) { |time| travel_to(time, with_usec: true) }
     end
 
@@ -114,11 +114,39 @@ module RailsJsdom
       assert_predicate @clock, :moved?
     end
 
-    test "a block travel returns Ruby's time to the time before it, to the second, as Rails does" do
+    test "after a block travel, the clock keeps the exact time from before it" do
       @clock.page_time(500)
       travel(1.hour, with_usec: true) { @clock.page_time(700) }
 
-      assert_equal (@epoch + 0.5r).change(usec: 0).to_r, Time.now.to_r
+      assert_equal [ false, (@epoch + 0.7r).to_r ], [ @clock.moved?, Time.now.to_r ]
+    end
+
+    test "freezing time again mid-test leaves the page where it is" do
+      @clock.page_time(500)
+      freeze_time
+
+      assert_equal [ (@epoch.to_r * 1000).to_f, 500.0 ], @clock.view.values_at(:epoch, :now)
+    end
+
+    test "a travel to the current time without its fraction keeps the exact time" do
+      @clock.page_time(500)
+      travel_to Time.now
+      @clock.view
+
+      assert_equal (@epoch + 0.5r).to_r, Time.now.to_r
+    end
+
+    test "a travel back by a whole second is a real travel back" do
+      @clock.page_time(500)
+      travel_to Time.now - 1, with_usec: true
+
+      assert_equal ((@epoch - 1).to_r * 1000).to_f, @clock.view.fetch(:epoch)
+    end
+
+    test "a time with no fraction to drop is left alone" do
+      clock = Clock.new(Time.at(1_700_000_000)) { |time| travel_to(time, with_usec: true) }
+
+      assert_not_predicate clock, :moved?
     end
   end
 end

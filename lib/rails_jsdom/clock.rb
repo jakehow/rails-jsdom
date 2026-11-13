@@ -45,15 +45,26 @@ module RailsJsdom
     end
 
     def moved?
+      keep_fraction
       Time.now.to_r != current.to_r
     end
 
     def view
+      keep_fraction
       follow_travel_back
       { epoch: (@epoch.to_r * 1000).to_f, now: (@now + ahead).to_f, deadline: deadline }
     end
 
     private
+
+    def keep_fraction
+      @travel.call(current) if fraction_dropped?
+    end
+
+    def fraction_dropped?
+      exact = current.to_r
+      exact != exact.floor && Time.now.to_r == exact.floor
+    end
 
     def follow_travel_back
       @epoch = Time.now - (@now / 1000) if ahead.negative?

@@ -47,7 +47,19 @@ class TimeInteractionTest < RailsJsdom::TestCase
     assert_equal milliseconds(@started - 1.day), evaluate_script("Date.now()")
   end
 
-  test "after a block travel, the page's Date is Ruby's time again" do
+  test "after a block travel, the page's Date is exactly the time before it" do
+    travel(1.day) { Time.now }
+
+    assert_equal milliseconds(@started), evaluate_script("Date.now()")
+  end
+
+  test "freezing time again mid-test leaves the page's Date where it is" do
+    freeze_time
+
+    assert_equal milliseconds(@started), evaluate_script("Date.now()")
+  end
+
+  test "after a block travel that drove the page, the page's Date is Ruby's time again" do
     travel(1.day, with_usec: true) { evaluate_script("Date.now()") }
 
     assert_equal milliseconds(Time.now), evaluate_script("Date.now()")

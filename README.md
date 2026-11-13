@@ -268,7 +268,7 @@ The clock is the test's clock, shared by Ruby and every page:
 
 - At the start of each test, Ruby's time is frozen with `travel_to`. The page's `Date` and `performance.now()` follow the virtual clock from that time.
 - When the page's clock moves, Ruby's time moves with it before Rails handles anything from the page, so timestamps the server writes agree with the page.
-- When the test moves time with `travel` or `travel_to`, the page's clock moves forward before the next command, running the timers due on the way in order. Moving back moves the page's `Date` back. A block `travel_to` ends at the time before it, as Rails does.
+- When the test moves time with `travel` or `travel_to`, the page's clock moves forward before the next command, running the timers due on the way in order. Moving back moves the page's `Date` back. Rails restores a stubbed time without its fraction of a second, at the end of a block `travel_to` and in `freeze_time`; when that is the only change, the clock keeps the exact time and the page does not move.
 - All sessions share the clock. A session's timers that fell due while another session ran run before its next command.
 
 ## Continuous integration
