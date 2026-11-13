@@ -258,6 +258,8 @@ Action Cable runs in the test's thread, so nothing is left to chance:
 
 For this, each `RailsJsdom::TestCase` puts its own pub/sub adapter on `ActionCable.server`, in place of the `test` adapter, and puts the previous one back after the test. It records broadcasts as the `test` adapter does, so `assert_broadcasts` and `assert_broadcast_on` keep working, and it delivers each one as it is made. A broadcast must come from the test, from a request the page makes, or from jobs the test performs with `perform_enqueued_jobs`. A broadcast from another thread is not delivered, and the next command fails with an error that says why.
 
+An error in your connection or channel code that no `rescue_from` handles — in `connect`, `subscribed`, an action, a stream handler or a periodic timer — fails the test at its next command. Action Cable would log it and carry on; the error message names the error, the page command or method that raised it, and the backtrace. Errors your channel or connection handles with `rescue_from` stay handled, and a connection rejected with `reject_unauthorized_connection` does not fail the test.
+
 A page whose script never stops, such as an endless loop, cannot answer. After `RailsJsdom.command_timeout` seconds (default 30) its Node process is stopped and the command fails with an error that says so; the next command starts a new process.
 
 ## Timers and settling

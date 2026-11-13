@@ -158,12 +158,58 @@ module RailsJsdom
       assert_empty @cable.drain
     end
 
-    test "a command that is not JSON is logged and answered with nothing" do
+    test "a command that is not JSON fails the test" do
       open_socket
-      @cable.drain
       send_command("not json")
 
-      assert_empty @cable.drain
+      assert_match(/JSON::ParserError: .* while handling the page's command not json/, reported_failure)
+    end
+
+    test "an error a channel action does not handle fails the test, naming the command" do
+      boom_socket
+      perform_on_boom("explode")
+
+      assert_match(/\ARuntimeError: boom was raised in Action Cable code while handling the page's command .*BoomChannel.*explode/, reported_failure)
+    end
+
+    test "the failure carries the error's backtrace" do
+      boom_socket
+      perform_on_boom("explode")
+
+      assert_match(/boom_channel.rb:\d+:in/, reported_failure)
+    end
+
+    test "an error the channel handles with rescue_from does not fail the test" do
+      boom_socket
+      perform_on_boom("explode_argument")
+
+      assert_equal [ false, [ { "handled" => "handled by the channel" } ] ], [ ActionCable.server.pubsub.failed?, @cable.drain.map { |frame| JSON.parse(frame[:data])["message"] } ]
+    end
+
+    test "an error the connection handles with rescue_from does not fail the test" do
+      boom_socket
+      perform_on_boom("explode_key")
+
+      assert_equal [ false, [ { "handled" => "handled by the connection" } ] ], [ ActionCable.server.pubsub.failed?, @cable.drain.map { |frame| JSON.parse(frame[:data]) } ]
+    end
+
+    test "an error in subscribed that nothing handles fails the test" do
+      open_socket
+      send_command(command: "subscribe", identifier: { channel: "BoomChannel", fail: true }.to_json)
+
+      assert_match(/RuntimeError: subscribing failed/, reported_failure)
+    end
+
+    test "an error in connect fails the test" do
+      open_socket(cookie: "broken=1")
+
+      assert_match(/RuntimeError: connecting failed was raised in Action Cable code while running ApplicationCable::Connection#handle_open/, reported_failure)
+    end
+
+    test "a connection the app rejects does not fail the test" do
+      open_socket(cookie: "banned=1")
+
+      assert_not_predicate ActionCable.server.pubsub, :failed?
     end
 
     test "a command sent after the server closed the connection is dropped" do
@@ -229,6 +275,20 @@ module RailsJsdom
 
     def send_command(command)
       @cable.answer({ "action" => "send", "socket" => 1, "data" => command.is_a?(String) ? command : command.to_json }, nil)
+    end
+
+    def boom_socket
+      open_socket
+      send_command(command: "subscribe", identifier: { channel: "BoomChannel" }.to_json)
+      @cable.drain
+    end
+
+    def perform_on_boom(action)
+      send_command(command: "message", identifier: { channel: "BoomChannel" }.to_json, data: { action: action }.to_json)
+    end
+
+    def reported_failure
+      assert_raises(Error) { ActionCable.server.pubsub.raise_failure }.message
     end
 
     def types(frames)

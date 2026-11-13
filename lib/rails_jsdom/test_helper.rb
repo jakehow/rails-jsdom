@@ -795,13 +795,13 @@ module RailsJsdom
     def rails_jsdom_catch_up
       if rails_jsdom_cable.active?
         rails_jsdom_call(command: "settle")
-      elsif rails_jsdom_clock.moved? || rails_jsdom_refused_broadcast?
+      elsif rails_jsdom_clock.moved? || rails_jsdom_cable_failed?
         rails_jsdom_call(command: "catch_up")
       end
     end
 
-    def rails_jsdom_refused_broadcast?
-      !!@rails_jsdom_pubsub&.refused?
+    def rails_jsdom_cable_failed?
+      !!@rails_jsdom_pubsub&.failed?
     end
 
     def rails_jsdom_cable
@@ -809,7 +809,7 @@ module RailsJsdom
     end
 
     def rails_jsdom_call(message)
-      @rails_jsdom_pubsub&.raise_refused
+      @rails_jsdom_pubsub&.raise_failure
       RailsJsdom.bridge.call(message, self)
     end
 

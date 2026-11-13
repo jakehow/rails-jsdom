@@ -47,6 +47,7 @@ end
 - Every action settles the page before it returns: timers up to one second ahead have run, no request is pending, and every Action Cable message the server has sent has reached the page. Never add `sleep`, waits or retries.
 - Time is virtual and shared: Ruby's time is frozen at the start of the test, and the page's `Date` follows the page's clock. Use `travel` or `travel_to` to move time; the page catches up before the next command.
 - Broadcasts must come from the test, a page request or `perform_enqueued_jobs`. A broadcast from another thread fails the next command.
+- An error in connection or channel code that no `rescue_from` handles fails the next command. Fix the error, or handle it with `rescue_from` if it is expected.
 - A JavaScript error, an unhandled promise rejection or an unexpected `alert`, `confirm` or `prompt` fails the action. CSS that jsdom cannot parse, such as nested rules, does not. Wrap actions that show a dialog in `accept_alert`, `accept_confirm`, `dismiss_confirm`, `accept_prompt` or `dismiss_prompt`.
 - `assert_selector` and `find` count only visible elements unless you pass `visible: false`. `assert_dom` and `assert_select` see every element.
 - Requests to other hosts fail like a network error. Answer them with `stub_fetch` after the page loads.

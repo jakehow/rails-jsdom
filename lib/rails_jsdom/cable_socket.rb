@@ -19,19 +19,17 @@ module RailsJsdom
 
       def opened
         start
-        work(self, :handle_open)
+        work(@connection, :handle_open)
+        work(self, :keep_alive)
         [ -1, {}, [] ]
       end
 
-      def handle_open
-        @connection.handle_open
+      def keep_alive
         @clock.keep_alive(self) if open?
       end
 
       def dispatch(text)
         @connection.handle_incoming(ActiveSupport::JSON.decode(text)) if open?
-      rescue StandardError => error
-        logger.error "Could not handle incoming message: #{text.inspect} [#{error.class} - #{error.message}]"
       end
 
       def disconnect
@@ -44,6 +42,7 @@ module RailsJsdom
         @logger = @server.logger
         @connection = @server.config.connection_class.call.new(LegacyCableServer.new(@server, @clock, self), env)
         @connection.instance_variable_set(:@websocket, LegacyWebSocket.new(self))
+        @connection.singleton_class.prepend(LegacyRescue)
         @connection.process
       end
 
@@ -168,12 +167,15 @@ module RailsJsdom
 
     def run_jobs
       @working = true
-      while (job = @jobs.shift)
-        receiver, method, args, connection, block = job
-        @server.worker_pool.invoke(receiver, method, *args, connection: connection, &block)
-      end
+      run_job(*@jobs.shift) until @jobs.empty?
     ensure
       @working = false
+    end
+
+    def run_job(receiver, method, args, connection, block)
+      @server.worker_pool.work(connection) { receiver.send(method, *args, &block) }
+    rescue StandardError => error
+      @server.pubsub.report(CableFailure.new(error, receiver, method, args).message)
     end
 
     include({ socket: Modern, env: Legacy }.fetch(ActionCable::Connection::Base.instance_method(:initialize).parameters.dig(1, 1)))

@@ -81,7 +81,35 @@ class BroadcastInteractionTest < RailsJsdom::TestCase
     assert_dom "#list p", count: 0
   end
 
+  test "an error a channel action does not handle fails the next command" do
+    mount_html boom_page("explode")
+
+    assert_match(/RuntimeError: boom was raised in Action Cable code/, assert_raises(RailsJsdom::Error) { evaluate_script("1") }.message)
+  end
+
+  test "an error the channel handles with rescue_from reaches the page and fails nothing" do
+    mount_html boom_page("explode_argument")
+
+    assert_equal [ "handled by the channel" ], evaluate_script("handled")
+  end
+
   private
+
+  def boom_page(action)
+    <<~HTML
+      <script>
+        window.handled = []
+        const socket = new WebSocket("/cable", ["actioncable-v1-json"])
+        const identifier = JSON.stringify({ channel: "BoomChannel" })
+        socket.onmessage = event => {
+          const message = JSON.parse(event.data)
+          if (message.type === "welcome") socket.send(JSON.stringify({ command: "subscribe", identifier }))
+          if (message.type === "confirm_subscription") socket.send(JSON.stringify({ command: "message", identifier, data: JSON.stringify({ action: "#{action}" }) }))
+          if (message.message) handled.push(message.message.handled)
+        }
+      </script>
+    HTML
+  end
 
   def stream_page(signed_name, channel: "Turbo::StreamsChannel")
     "#{stream_source(signed_name, channel: channel)}<div id='list'></div>"

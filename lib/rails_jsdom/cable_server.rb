@@ -80,3 +80,11 @@ module RailsJsdom
     end
   end
 end
+
+module RailsJsdom
+  module LegacyRescue # :nodoc:
+    def rescue_with_handler(exception)
+      super || raise(exception)
+    end
+  end
+end

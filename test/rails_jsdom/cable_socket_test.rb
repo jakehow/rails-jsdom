@@ -14,7 +14,7 @@ module RailsJsdom
       def handle_open
         events << :open
         socket.transmit(type: "welcome")
-        socket.close if socket.request.cookies["banned"]
+        check(socket.request.cookies)
       end
 
       def handle_incoming(payload)
@@ -38,6 +38,10 @@ module RailsJsdom
         server.executor.post { events << :posted }
       end
 
+      def crash(_payload)
+        raise "command failed"
+      end
+
       def handle_close
         events << :close
       end
@@ -48,7 +52,15 @@ module RailsJsdom
 
       private
 
+      def check(cookies)
+        raise "opening failed" if cookies["broken"]
+
+        socket.close if cookies["banned"]
+      end
+
       def later(name)
+        raise "work failed" if name == "fail"
+
         events << :"after #{name}"
       end
     end
@@ -63,6 +75,12 @@ module RailsJsdom
       @clock = Clock.new(Time.now) { |time| travel_to(time, with_usec: true) }
       @frames = []
       @socket = Socket.new(1, @frames, @clock)
+      @previous_pubsub = ActionCable.server.pubsub
+      ActionCable.server.instance_variable_set(:@pubsub, CableAdapter.new(ActionCable.server))
+    end
+
+    teardown do
+      ActionCable.server.instance_variable_set(:@pubsub, @previous_pubsub)
     end
 
     test "opening hands the app connection the server and the socket, then runs its handle_open" do
@@ -100,10 +118,32 @@ module RailsJsdom
       assert_equal [ :open, { "command" => "subscribe" } ], connection.events
     end
 
-    test "a command that is not JSON is logged, not handled" do
+    test "a command that is not JSON fails the test" do
       open_socket
-      @logger.expects(:error).with(regexp_matches(/Could not handle incoming message: "nope"/))
       @socket.receive("nope")
+
+      assert_match(/JSON::ParserError: .* while handling the page's command nope/, reported_failure)
+    end
+
+    test "an error the connection does not handle in a command fails the test, naming the command" do
+      open_socket
+      @socket.receive({ do: "crash" }.to_json)
+
+      assert_match(/\ARuntimeError: command failed was raised in Action Cable code while handling the page's command \{"do":"crash"\}/, reported_failure)
+    end
+
+    test "an error in handle_open fails the test, naming the connection" do
+      open_socket(cookie: "broken=1")
+
+      assert_match(/RuntimeError: opening failed was raised in Action Cable code while running RailsJsdom::CableSocketTest::Connection#handle_open/, reported_failure)
+    end
+
+    test "an error in work the connection asked for fails the test, and later work still runs" do
+      open_socket
+      @socket.receive({ do: "work", name: "fail" }.to_json)
+      @socket.receive({ do: "work", name: "two" }.to_json)
+
+      assert_equal [ true, :"after two" ], [ reported_failure.include?("work failed"), connection.events.last ]
     end
 
     test "work the connection asks for runs after the job that asked for it, before receiving returns" do
@@ -190,6 +230,10 @@ module RailsJsdom
 
     def open_socket(cookie: "")
       @socket.open("ws://www.example.com/cable", [ "actioncable-v1-json" ], cookie)
+    end
+
+    def reported_failure
+      assert_raises(Error) { ActionCable.server.pubsub.raise_failure }.message
     end
 
     def connection

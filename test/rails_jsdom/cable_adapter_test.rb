@@ -46,18 +46,18 @@ module RailsJsdom
     test "a broadcast from another thread is refused with an explanation" do
       Thread.new { ActionCable.server.broadcast("room", { text: "Hi" }) }.join
 
-      assert_match(/"room" was broadcast from a thread other than the test's/, assert_raises(Error) { @adapter.raise_refused }.message)
+      assert_match(/"room" was broadcast from a thread other than the test's/, assert_raises(Error) { @adapter.raise_failure }.message)
     end
 
     test "a refused broadcast is reported once" do
       Thread.new { ActionCable.server.broadcast("room", { text: "Hi" }) }.join
-      assert_raises(Error) { @adapter.raise_refused }
+      assert_raises(Error) { @adapter.raise_failure }
 
-      assert_not_predicate @adapter, :refused?
+      assert_not_predicate @adapter, :failed?
     end
 
-    test "an adapter with no refused broadcast raises nothing" do
-      assert_nil @adapter.raise_refused
+    test "an adapter with no failure raises nothing" do
+      assert_nil @adapter.raise_failure
     end
   end
 end
