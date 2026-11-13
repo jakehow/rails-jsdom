@@ -108,7 +108,8 @@ test("browser APIs jsdom lacks are stubbed", async () => {
     const media = matchMedia("(min-width: 600px)")
     media.addListener(); media.removeListener(); media.addEventListener(); media.removeEventListener()
     scrollTo(0, 0); scroll(0, 0); scrollBy(0, 0)
-    document.getElementById("p").scrollIntoView()
+    const p = document.getElementById("p")
+    p.scrollIntoView(); p.scrollTo(0, 0); p.scroll(0, 0); p.scrollBy(0, 0)
     const observer = new IntersectionObserver(() => {})
     observer.observe(); observer.unobserve(); observer.disconnect()
     await navigator.clipboard.writeText("copied")
@@ -116,6 +117,53 @@ test("browser APIs jsdom lacks are stubbed", async () => {
   })()`)
 
   assert.deepEqual(result, [false, "(min-width: 600px)", false, [], "", "function"])
+})
+
+test("checkVisibility is false for an element that assertions treat as hidden", async () => {
+  await runner.load(`<p id="shown">Shown</p><p id="hidden" hidden><span id="inside">Inside</span></p><details><summary id="summary">More</summary><span id="closed">Closed</span></details>`)
+  const result = await runner.evaluate(`["shown", "hidden", "inside", "summary", "closed"].map(id => document.getElementById(id).checkVisibility())`)
+
+  assert.deepEqual(result, [true, false, false, true, false])
+})
+
+test("a MessageChannel delivers each message to the other port as a task on the clock", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const received = []
+    const { port1, port2 } = new MessageChannel()
+    port1.addEventListener("message", event => received.push(["listener", event.data]))
+    port1.onmessage = event => received.push(["handler", event.data])
+    port2.onmessage = event => received.push(["back", event.data.count])
+    port1.start()
+    const message = { count: 1 }
+    port2.postMessage(message)
+    message.count = 2
+    port1.postMessage(message)
+    const before = received.length
+    await new Promise(resolve => setTimeout(resolve, 0))
+    return [before, received]
+  })()`)
+
+  assert.deepEqual(result, [0, [["listener", { count: 1 }], ["handler", { count: 1 }], ["back", 2]]])
+})
+
+test("a closed MessagePort neither sends nor receives", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const received = []
+    const first = new MessageChannel()
+    first.port1.addEventListener("message", event => received.push(event.data))
+    first.port2.postMessage("sent before closing")
+    first.port1.close()
+    const second = new MessageChannel()
+    second.port2.onmessage = event => received.push(event.data)
+    second.port1.close()
+    second.port1.postMessage("sent after closing")
+    await new Promise(resolve => setTimeout(resolve, 0))
+    return received
+  })()`)
+
+  assert.deepEqual(result, [])
 })
 
 test("CSS.escape serialises identifiers as browsers do", async () => {
@@ -135,6 +183,11 @@ test("jsdom still lacks the browser APIs the runtime adds", () => {
     ResizeObserver: window.ResizeObserver,
     clipboard: window.navigator.clipboard,
     scrollIntoView: window.Element.prototype.scrollIntoView,
+    elementScrollTo: window.Element.prototype.scrollTo,
+    elementScroll: window.Element.prototype.scroll,
+    elementScrollBy: window.Element.prototype.scrollBy,
+    checkVisibility: window.Element.prototype.checkVisibility,
+    MessageChannel: window.MessageChannel,
     show: dialog.show,
     showModal: dialog.showModal,
     close: dialog.close,

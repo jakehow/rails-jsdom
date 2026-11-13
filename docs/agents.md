@@ -135,6 +135,6 @@ Interaction tests are faster than system tests, so do not merge tests to save ti
 ## Limits
 
 - **No layout or painting.** Computed CSS, geometry, breakpoints, screenshots and drag and drop cannot be tested.
-- **Stubbed browser APIs.** jsdom lacks some browser APIs, so rails-jsdom stubs these: `matchMedia` never matches, `IntersectionObserver` and `ResizeObserver` never report, scrolling does nothing, and `navigator.clipboard` drops writes. A page that needs another missing API needs a stub in the test.
+- **Stubbed browser APIs.** jsdom lacks some browser APIs, so rails-jsdom stubs these: `matchMedia` never matches, `IntersectionObserver` and `ResizeObserver` never report, scrolling does nothing, `checkVisibility` is false for elements that assertions treat as hidden, `MessageChannel` delivers messages on the virtual clock, and `navigator.clipboard` drops writes. A page that needs another missing API needs a stub in the test.
 - **Remote importmap pins** load as empty modules. Vendor a pin with `bin/importmap pin --download` to test it.
 - **Requirements:** Ruby 3.3, 3.4 or 4.0, and Rails 8.1 with importmap, Propshaft, Turbo and Stimulus. Stimulus controllers must live under `app/javascript/controllers`.
