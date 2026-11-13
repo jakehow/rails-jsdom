@@ -2,8 +2,8 @@ PATH
   remote: .
   specs:
     rails-jsdom (0.1.0)
-      actioncable (>= 7.1)
-      actionpack (>= 7.1)
+      actioncable (>= 8.1)
+      actionpack (>= 8.1)
       importmap-rails (>= 2.0)
       nokogiri (>= 1.15)
       propshaft (>= 1.0)
