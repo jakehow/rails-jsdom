@@ -96,7 +96,7 @@ The esbuild bundle is built once per test worker. Each `visit` then costs a Rail
 - Ruby 3.3, 3.4 or 4.0
 - Rails 8.1 with `importmap-rails`, `propshaft`, `turbo-rails` and `stimulus-rails`
 - Stimulus controllers under `app/javascript/controllers`, named `*_controller.js`
-- Node.js supported by jsdom (currently 20.19+, 22.13+ or 24+)
+- Node.js 22.22.2+, 24.15+ or 26+, the supported LTS lines that jsdom 31 runs on
 
 These are the versions CI tests and that issues are fixed for. Ruby 3.2 has reached end of life. Older Rails releases may still work, but they are not tested or supported.
 
@@ -119,7 +119,7 @@ The install generator:
 
 1. Adds `require "rails_jsdom"` to `test/test_helper.rb`, after `require "rails/test_help"`.
 2. Creates `test/interactions/` for your interaction tests. Any test directory works; `bin/rails test` picks them up.
-3. Adds `jsdom` and `esbuild` to the `devDependencies` in `package.json`, creating the file if your app has none. The ranges (`^29.1.1`, `^0.28.2`) allow newer minor and patch releases but never a new major version. The gem loads both from your app's `node_modules`.
+3. Adds `jsdom` and `esbuild` to the `devDependencies` in `package.json`, creating the file if your app has none. The ranges (`^31.0.0`, `^0.28.2`) allow newer minor and patch releases but never a new major version. The gem loads both from your app's `node_modules`.
 4. Sets `min-release-age=7` in `.npmrc`, unless it is already set, so npm installs only versions published at least 7 days ago. See [Supply chain](#supply-chain).
 5. Warns if your npm is older than 11.10, which ignores `min-release-age`.
 6. Runs `npm install`. Pass `--skip-npm` to run it yourself.
@@ -280,7 +280,7 @@ CI needs Node and your app's npm packages before the tests run:
 ```yaml
 - uses: actions/setup-node@v4
   with:
-    node-version: 22
+    node-version: 26
 - run: npm ci
 - run: bin/rails test
 ```

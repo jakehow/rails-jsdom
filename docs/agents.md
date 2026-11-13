@@ -18,7 +18,7 @@ This page is for an AI coding agent working in a Rails app that uses, or is movi
    - adds `jsdom` and `esbuild` to `package.json` and runs `npm install`;
    - sets `min-release-age=7` in `.npmrc`;
    - ignores `node_modules`.
-3. Make CI install the Node packages before the tests, with `npm ci` after setting up Node 22 or later.
+3. Make CI install the Node packages before the tests, with `npm ci` after setting up Node 26 (or 22.22.2+ or 24.15+).
 4. Commit `package.json`, `package-lock.json` and `.npmrc`.
 
 ## Write an interaction test

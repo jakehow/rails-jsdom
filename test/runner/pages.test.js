@@ -88,18 +88,29 @@ test("dialog elements open and close, firing close only when they were open", as
 })
 
 test("a stylesheet jsdom cannot parse does not fail the page, as browsers skip CSS they cannot parse", async () => {
-  await runner.load("<style>.a { .b { display: none } }</style><p>Page</p>")
+  await runner.load("<style>@@@ {{{ display: none</style><p>Page</p>")
 
   assert.equal((await runner.snapshot()).text, "Page")
 })
 
-test("jsdom reports nested CSS as a stylesheet it cannot parse", () => {
+test("jsdom reports a stylesheet it cannot parse, and parses nested CSS", () => {
   const types = []
   const virtualConsole = new VirtualConsole()
   virtualConsole.on("jsdomError", error => types.push(error.type))
-  new JSDOM("<style>.a { .b { display: none } }</style>", { virtualConsole })
+  new JSDOM("<style>.a { .b { display: none } }</style><style>@@@ {{{ display: none</style>", { virtualConsole })
 
   assert.deepEqual(types, ["css-parsing"])
+})
+
+test("jsdom fires load for an inserted style element by itself", async () => {
+  const { window } = new JSDOM("")
+  const loaded = []
+  const style = window.document.createElement("style")
+  style.addEventListener("load", () => loaded.push("style"))
+  window.document.head.append(style)
+  await new Promise(resolve => setImmediate(resolve))
+
+  assert.deepEqual(loaded, ["style"])
 })
 
 test("an inserted stylesheet fires load, as a browser fires it once the sheet is ready", async () => {
@@ -121,7 +132,7 @@ test("an inserted stylesheet fires load, as a browser fires it once the sheet is
     return [before, loaded]
   })()`)
 
-  assert.deepEqual(result, [0, ["style", "link.stylesheet", "style"]])
+  assert.deepEqual(result, [0, ["style", "style", "link.stylesheet"]])
 })
 
 test("browser APIs jsdom lacks are stubbed", async () => {
@@ -256,7 +267,6 @@ test("jsdom still lacks the browser APIs the runtime adds", () => {
   const { window } = new JSDOM("<dialog></dialog>")
   const dialog = window.document.querySelector("dialog")
   const missing = {
-    CSS: window.CSS,
     matchMedia: window.matchMedia,
     IntersectionObserver: window.IntersectionObserver,
     ResizeObserver: window.ResizeObserver,

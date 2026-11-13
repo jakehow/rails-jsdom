@@ -13,7 +13,7 @@ module RailsJsdom
     class InstallGenerator < Rails::Generators::Base
       # The Node packages the app needs. Each range allows newer minor and patch
       # releases but never a new major version.
-      PACKAGES = { "jsdom" => "^29.1.1", "esbuild" => "^0.28.2" }.freeze
+      PACKAGES = { "jsdom" => "^31.0.0", "esbuild" => "^0.28.2" }.freeze
 
       # How many days old a package version must be before npm installs it.
       RELEASE_AGE_DAYS = 7

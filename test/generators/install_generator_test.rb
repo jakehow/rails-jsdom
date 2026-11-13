@@ -38,7 +38,7 @@ module RailsJsdom
       run_generator %w[--skip-npm]
 
       assert_file "package.json" do |package|
-        assert_equal({ "private" => true, "devDependencies" => { "jsdom" => "^29.1.1", "esbuild" => "^0.28.2" } }, JSON.parse(package))
+        assert_equal({ "private" => true, "devDependencies" => { "jsdom" => "^31.0.0", "esbuild" => "^0.28.2" } }, JSON.parse(package))
       end
     end
 
