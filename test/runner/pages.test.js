@@ -672,3 +672,30 @@ test("an element can enter and leave fullscreen, as on a desktop browser", async
 
   assert.deepEqual(result, [true, "d", null, ["d", null]])
 })
+
+test("a page that keeps measuring layout in one turn of its event loop fails with an explanation, instead of looping forever", async () => {
+  const loop = `<div id="menu"></div><script>
+    new MutationObserver(() => {
+      if (menu.getBoundingClientRect().width === 0) menu.append(document.createElement("span"))
+    }).observe(menu, { childList: true })
+  </script>`
+  await runner.load(loop)
+
+  await assert.rejects(runner.evaluate("menu.append(document.createElement('span'))"), /measured element positions 10000 times without its event loop moving on\. jsdom has no layout/)
+})
+
+test("measuring layout again in later turns of the event loop is fine", async () => {
+  await runner.load(`<div id="d"></div>`)
+  const result = await runner.evaluate(`new Promise(resolve => {
+    let count = 0
+    const measure = () => {
+      for (let index = 0; index < 6000; index += 1) d.getBoundingClientRect()
+      count += 1
+      if (count < 3) setTimeout(measure, 0)
+      else resolve(count)
+    }
+    measure()
+  })`)
+
+  assert.equal(result, 3)
+})

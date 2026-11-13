@@ -65,7 +65,7 @@ end
 jsdom implements the DOM and runs JavaScript, but it does not lay out or paint pages. These cannot be tested with `rails-jsdom`; if they matter to you, keep a small number of real-browser system tests for them:
 
 - **Computed CSS** — colours, fonts, backgrounds, hover styles.
-- **Layout and geometry** — `getBoundingClientRect`, centring, gaps, overflow, wrapping, "these cards are the same height".
+- **Layout and geometry** — `getBoundingClientRect`, centring, gaps, overflow, wrapping, "these cards are the same height". Every element and range measures 0x0 at 0,0. Code that waits for a real measurement, such as a menu that positions itself at the caret and re-measures until it gets a box, would repeat forever; after 10,000 measurements in one turn of the event loop the page throws an error that says so, and the action fails at once.
 - **CSS media-query breakpoints** — elements shown or hidden only by responsive CSS at a viewport width (for example Tailwind's `md:hidden`). `matchMedia` is stubbed so controllers don't crash, but CSS does not respond to width. Responsive behaviour driven by JavaScript, such as a mobile menu toggle, is still testable.
 - **Theme switching** where the theme only changes CSS.
 - **Screenshots** and other visual evidence.
