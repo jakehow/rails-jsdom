@@ -116,7 +116,10 @@ How we measured:
 
 Why the gains differ:
 
-- Campfire's system tests spend most of their time waiting in the browser, about 11.6s per test. Interaction tests do not wait.
+- Campfire's system tests spend most of their time in Capybara calls that block until a timeout. Interaction tests settle the page instead of waiting, so these calls return at once:
+  - Every time a test joins a room, the `join_room` helper calls `page.has_css?("[data-pwa-install-target~='dialog']", wait: 5)` to close an install dialog. Campfire has no element that matches, so each call waits the full 5 seconds and returns false. The moved tests join a room at least 50 times, so at least 250 of the 317.7 seconds are this wait.
+  - Other calls wait for Action Cable broadcasts to reach the page, with `wait: 5` and `wait: 10`, or poll the database with `sleep 0.25` until a message is saved.
+  - Tests with more than one user open a second Chrome for each `using_session`.
 - Fizzy's system tests were already fast, about 1.1s per test, with no waiting. In both kinds of test, most of the time is the page's own work: Rails renders, Stimulus connects controllers and Turbo renders frames and streams.
 
 ### Bugs found
