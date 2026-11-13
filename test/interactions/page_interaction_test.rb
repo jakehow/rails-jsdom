@@ -7,6 +7,26 @@ class PageInteractionTest < RailsJsdom::TestCase
     assert_dom "[data-counter-target=count]", text: "2"
   end
 
+  test "a visited page keeps the URL that was visited when middleware moves part of the path into the script name" do
+    visit "/123"
+
+    assert_equal "http://www.example.com/123", current_url
+  end
+
+  test "a full page load keeps the URL of the link when middleware moves part of the path into the script name" do
+    visit second_path
+    click_on "Full reload to a prefixed page"
+
+    assert_equal "http://www.example.com/123", current_url
+  end
+
+  test "a Turbo Drive visit to a page with new head styles renders the page" do
+    visit second_path
+    click_link "Styled page"
+
+    assert_selector "h1", text: "Styled page"
+  end
+
   test "clicking a Stimulus action updates its targets" do
     visit root_path
     click "Increment"

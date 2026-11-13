@@ -239,9 +239,21 @@ module RailsJsdom
     # `ActionDispatch::Http::UploadedFile` params.
     #
     #   attach_file "Avatar", file_fixture("avatar.png")
-    def attach_file(locator, paths, match: nil)
-      files = Array(paths).map { |path| { name: File.basename(path), type: Rack::Mime.mime_type(File.extname(path.to_s)), base64: [ File.binread(path) ].pack("m0") } }
-      rails_jsdom_act("attach", locator, match, files: files)
+    #
+    # With a block, `attach_file` takes only the paths, and puts them in the
+    # file field that the block opens a file chooser for, as when a script
+    # calls `click()` on a file field it created. The field need not be on
+    # the page. Raises RailsJsdom::Error if the block opened no file chooser.
+    #
+    #   attach_file(file_fixture("avatar.png")) { click_on "Upload" }
+    def attach_file(locator, paths = nil, match: nil)
+      if block_given?
+        RailsJsdom.bridge.call(command: "expect_file_chooser", files: rails_jsdom_files(locator))
+        yield
+        RailsJsdom.bridge.call(command: "file_chooser_opened") || raise(Error, "No file chooser opened in the attach_file block")
+      else
+        rails_jsdom_act("attach", locator, match, files: rails_jsdom_files(paths))
+      end
     end
 
     # Types `keys` into the focused element. A String types its characters; a
@@ -636,7 +648,7 @@ module RailsJsdom
 
     def rails_jsdom_visit(path, history)
       rails_jsdom_request("GET", path, headers: {})
-      rails_jsdom_perform(command: "load", html: response.body, url: request.url, history: history)
+      rails_jsdom_perform(command: "load", html: response.body, url: request.original_url, history: history)
     end
 
     def rails_jsdom_session_name
@@ -665,6 +677,10 @@ module RailsJsdom
 
     def rails_jsdom_act(command, locator, match, **options)
       rails_jsdom_perform(command: command, locator: locator, scope: rails_jsdom_scope, match: match, **options)
+    end
+
+    def rails_jsdom_files(paths)
+      Array(paths).map { |path| { name: File.basename(path), type: Rack::Mime.mime_type(File.extname(path.to_s)), base64: [ File.binread(path) ].pack("m0") } }
     end
 
     def rails_jsdom_modal(type, accept, text, with: nil)
@@ -769,7 +785,7 @@ module RailsJsdom
     end
 
     def rails_jsdom_fetch_reply(redirected)
-      { status: response.status, headers: response.headers.to_h.except("set-cookie"), body: response.body, url: request.url, redirected: redirected }
+      { status: response.status, headers: response.headers.to_h.except("set-cookie"), body: response.body, url: request.original_url, redirected: redirected }
     end
 
     def rails_jsdom_request(method, path, headers:, params: nil)

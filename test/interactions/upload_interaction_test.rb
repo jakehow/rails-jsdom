@@ -68,4 +68,19 @@ class UploadInteractionTest < RailsJsdom::TestCase
     assert_selector "#caption", text: "Holiday"
     assert_no_selector "#uploaded li"
   end
+
+  test "attach_file with a block answers the file chooser that a script opens" do
+    visit new_upload_path
+    attach_file("#{FILES}/hello.txt") { click_on "Choose with a script" }
+
+    assert_selector "#uploaded li", text: "hello.txt text/plain 6"
+    assert_selector "[data-file-picker-target=preview] img[src^='blob:']"
+  end
+
+  test "attach_file with a block raises when the block opens no file chooser" do
+    visit new_upload_path
+    error = assert_raises(RailsJsdom::Error) { attach_file("#{FILES}/hello.txt") { fill_in "Caption", with: "Trip" } }
+
+    assert_equal "No file chooser opened in the attach_file block", error.message
+  end
 end

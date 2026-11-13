@@ -6,7 +6,7 @@ This page is for an AI coding agent working in a Rails app that uses, or is movi
 
 - Interaction tests for Rails apps that use importmap, Turbo and Stimulus, without a browser or a test server.
 - Rails renders the real pages. The real Stimulus controllers and Turbo run in jsdom, in one Node process per test worker.
-- Every request the page makes (`fetch`, Turbo Drive visits, form submissions) is answered by Rails inside the test process, in the test's session.
+- Every request the page makes (`fetch`, `XMLHttpRequest`, Turbo Drive visits, form submissions) is answered by Rails inside the test process, in the test's session.
 - The helpers use the system test method names: `visit`, `click_on`, `fill_in`, `within`, `accept_confirm`, `assert_selector`, `find` and so on.
 
 ## Set up an app
@@ -46,7 +46,7 @@ end
 - Put the test in `test/interactions/` and subclass `RailsJsdom::TestCase`. It is an `ActionDispatch::IntegrationTest`, so fixtures, `perform_enqueued_jobs` and Rails assertions work.
 - Sign in the way the app's integration tests do, usually by posting to the session controller.
 - Every action settles the page before it returns: timers up to one second ahead have run, no request is pending, and Action Cable messages the page is waiting for have arrived. Never add `sleep`, waits or retries.
-- A JavaScript error, an unhandled promise rejection or an unexpected `alert`, `confirm` or `prompt` fails the action. Wrap actions that show a dialog in `accept_alert`, `accept_confirm`, `dismiss_confirm`, `accept_prompt` or `dismiss_prompt`.
+- A JavaScript error, an unhandled promise rejection or an unexpected `alert`, `confirm` or `prompt` fails the action. CSS that jsdom cannot parse, such as nested rules, does not. Wrap actions that show a dialog in `accept_alert`, `accept_confirm`, `dismiss_confirm`, `accept_prompt` or `dismiss_prompt`.
 - `assert_selector` and `find` count only visible elements unless you pass `visible: false`. `assert_dom` and `assert_select` see every element.
 - Requests to other hosts fail like a network error. Answer them with `stub_fetch` after the page loads.
 - Broadcasts made with `broadcast_*_later` arrive when the test performs the jobs, for example `perform_enqueued_jobs { click_on "Post" }`.
@@ -134,6 +134,6 @@ Interaction tests are faster than system tests, so do not merge tests to save ti
 ## Limits
 
 - **No layout or painting.** Computed CSS, geometry, breakpoints, screenshots and drag and drop cannot be tested.
-- **Stubbed browser APIs.** jsdom lacks some browser APIs, so rails-jsdom stubs these: `matchMedia` never matches, `IntersectionObserver` and `ResizeObserver` never report, scrolling does nothing, and `navigator.clipboard` drops writes. A page that needs another missing API needs a stub in the test.
+- **Stubbed browser APIs.** jsdom lacks some browser APIs, so rails-jsdom stubs these: `matchMedia` never matches, `IntersectionObserver` and `ResizeObserver` never report, scrolling does nothing, `checkVisibility` is false for elements that assertions treat as hidden, `MessageChannel` delivers messages on the virtual clock, inserted `<style>` and stylesheet `<link>` elements, and images once their `src` is set, fire `load` without fetching anything, `URL.createObjectURL` returns a `blob:` URL nothing can fetch, `DataTransfer` and `ClipboardEvent` exist so a test can dispatch a paste, and `navigator.clipboard` drops writes. A page that needs another missing API needs a stub in the test.
 - **Remote importmap pins** load as empty modules. Vendor a pin with `bin/importmap pin --download` to test it.
 - **Requirements:** Ruby 3.3, 3.4 or 4.0, and Rails 8.1 with importmap, Propshaft, Turbo and Stimulus. Stimulus controllers must live under `app/javascript/controllers`.

@@ -3,6 +3,7 @@
   <head>
     <title><%= content_for?(:title) ? yield(:title) : "rails-jsdom dummy" %></title>
     <%= javascript_importmap_tags %>
+    <%= yield :head %>
   </head>
   <body>
     <nav>

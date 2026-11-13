@@ -87,13 +87,51 @@ test("dialog elements open and close, firing close only when they were open", as
   assert.deepEqual(result, [true, false, "done", 2])
 })
 
+test("a stylesheet jsdom cannot parse does not fail the page, as browsers skip CSS they cannot parse", async () => {
+  await runner.load("<style>.a { .b { display: none } }</style><p>Page</p>")
+
+  assert.equal((await runner.snapshot()).text, "Page")
+})
+
+test("jsdom reports nested CSS as a stylesheet it cannot parse", () => {
+  const types = []
+  const virtualConsole = new VirtualConsole()
+  virtualConsole.on("jsdomError", error => types.push(error.type))
+  new JSDOM("<style>.a { .b { display: none } }</style>", { virtualConsole })
+
+  assert.deepEqual(types, ["css-parsing"])
+})
+
+test("an inserted stylesheet fires load, as a browser fires it once the sheet is ready", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const loaded = []
+    const listen = element => element.addEventListener("load", () => loaded.push(element.localName + (element.rel ? "." + element.rel : "")))
+    const style = document.createElement("style")
+    const sheet = Object.assign(document.createElement("link"), { rel: "stylesheet", href: "/app.css" })
+    const icon = Object.assign(document.createElement("link"), { rel: "icon", href: "/icon.png" })
+    const wrapper = document.createElement("div")
+    const nested = document.createElement("style")
+    wrapper.append(nested)
+    ;[style, sheet, icon, nested].forEach(listen)
+    document.head.append(style, sheet, icon, "text")
+    document.body.append(wrapper)
+    const before = loaded.length
+    await new Promise(resolve => setTimeout(resolve, 1))
+    return [before, loaded]
+  })()`)
+
+  assert.deepEqual(result, [0, ["style", "link.stylesheet", "style"]])
+})
+
 test("browser APIs jsdom lacks are stubbed", async () => {
   await runner.load(`<p id="p">Page</p>`)
   const result = await runner.evaluate(`(async () => {
     const media = matchMedia("(min-width: 600px)")
     media.addListener(); media.removeListener(); media.addEventListener(); media.removeEventListener()
     scrollTo(0, 0); scroll(0, 0); scrollBy(0, 0)
-    document.getElementById("p").scrollIntoView()
+    const p = document.getElementById("p")
+    p.scrollIntoView(); p.scrollTo(0, 0); p.scroll(0, 0); p.scrollBy(0, 0)
     const observer = new IntersectionObserver(() => {})
     observer.observe(); observer.unobserve(); observer.disconnect()
     await navigator.clipboard.writeText("copied")
@@ -101,6 +139,110 @@ test("browser APIs jsdom lacks are stubbed", async () => {
   })()`)
 
   assert.deepEqual(result, [false, "(min-width: 600px)", false, [], "", "function"])
+})
+
+test("checkVisibility is false for an element that assertions treat as hidden", async () => {
+  await runner.load(`<p id="shown">Shown</p><p id="hidden" hidden><span id="inside">Inside</span></p><details><summary id="summary">More</summary><span id="closed">Closed</span></details>`)
+  const result = await runner.evaluate(`["shown", "hidden", "inside", "summary", "closed"].map(id => document.getElementById(id).checkVisibility())`)
+
+  assert.deepEqual(result, [true, false, false, true, false])
+})
+
+test("a MessageChannel delivers each message to the other port as a task on the clock", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const received = []
+    const { port1, port2 } = new MessageChannel()
+    port1.addEventListener("message", event => received.push(["listener", event.data]))
+    port1.onmessage = event => received.push(["handler", event.data])
+    port2.onmessage = event => received.push(["back", event.data.count])
+    port1.start()
+    const message = { count: 1 }
+    port2.postMessage(message)
+    message.count = 2
+    port1.postMessage(message)
+    const before = received.length
+    await new Promise(resolve => setTimeout(resolve, 0))
+    return [before, received]
+  })()`)
+
+  assert.deepEqual(result, [0, [["listener", { count: 1 }], ["handler", { count: 1 }], ["back", 2]]])
+})
+
+test("a closed MessagePort neither sends nor receives", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const received = []
+    const first = new MessageChannel()
+    first.port1.addEventListener("message", event => received.push(event.data))
+    first.port2.postMessage("sent before closing")
+    first.port1.close()
+    const second = new MessageChannel()
+    second.port2.onmessage = event => received.push(event.data)
+    second.port1.close()
+    second.port1.postMessage("sent after closing")
+    await new Promise(resolve => setTimeout(resolve, 0))
+    return received
+  })()`)
+
+  assert.deepEqual(result, [])
+})
+
+test("a pasted DataTransfer carries its data to a paste listener", async () => {
+  await runner.load(`<div id="editor" contenteditable="true"></div>`)
+  const result = await runner.evaluate(`(() => {
+    const data = new DataTransfer()
+    data.setData("Text", "first")
+    data.setData("text/plain", "plain")
+    data.setData("URL", "https://example.test/")
+    data.setData("text/html", "<b>html</b>")
+    data.clearData("text/html")
+    data.setDragImage()
+    const editor = document.getElementById("editor")
+    const seen = []
+    editor.addEventListener("paste", event => seen.push(event instanceof Event, event.clipboardData.getData("text"), event.clipboardData.getData("url"), event.clipboardData.getData("text/html")))
+    editor.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true }))
+    return [seen, data.dropEffect, data.effectAllowed, new ClipboardEvent("copy").clipboardData]
+  })()`)
+
+  assert.deepEqual(result, [[true, "plain", "https://example.test/", ""], "none", "all", null])
+})
+
+test("DataTransfer items hold strings and files, read strings as a task, and can be removed", async () => {
+  await runner.load("<p>Page</p>")
+  const result = await runner.evaluate(`(async () => {
+    const data = new DataTransfer()
+    data.setData("text/plain", "plain")
+    data.items.add("link", "TEXT/URI-LIST")
+    data.items.add(new File(["f"], "a.txt", { type: "text/plain" }))
+    const seen = []
+    data.items[0].getAsString(text => seen.push(text))
+    data.items[0].getAsString()
+    data.items[2].getAsString(() => seen.push("file as string"))
+    const before = seen.length
+    await new Promise(resolve => setTimeout(resolve, 1))
+    const listed = [data.types, data.files.map(file => file.name), data.items.map(item => item.kind), data.items[0].getAsFile()]
+    data.items.remove(0)
+    const removed = data.types
+    data.clearData()
+    const cleared = data.types
+    data.items.clear()
+    return [before, seen, listed, removed, cleared, data.types]
+  })()`)
+
+  assert.deepEqual(result, [0, ["plain"], [["text/plain", "text/uri-list", "Files"], ["a.txt"], ["string", "string", "file"], null], ["text/uri-list", "Files"], ["Files"], []])
+})
+
+test("a Range has an empty bounding box and no client rects, as an element without layout does", async () => {
+  await runner.load("<p id=\"p\">Text</p>")
+  const result = await runner.evaluate(`(() => {
+    const range = document.createRange()
+    range.selectNodeContents(document.getElementById("p"))
+    const box = range.getBoundingClientRect()
+    return [box instanceof DOMRect, box.width, box.height, range.getClientRects().length]
+  })()`)
+
+  assert.deepEqual(result, [true, 0, 0, 0])
 })
 
 test("CSS.escape serialises identifiers as browsers do", async () => {
@@ -120,10 +262,16 @@ test("jsdom still lacks the browser APIs the runtime adds", () => {
     ResizeObserver: window.ResizeObserver,
     clipboard: window.navigator.clipboard,
     scrollIntoView: window.Element.prototype.scrollIntoView,
+    elementScrollTo: window.Element.prototype.scrollTo, elementScroll: window.Element.prototype.scroll, elementScrollBy: window.Element.prototype.scrollBy,
+    checkVisibility: window.Element.prototype.checkVisibility,
+    MessageChannel: window.MessageChannel,
+    DataTransfer: window.DataTransfer, ClipboardEvent: window.ClipboardEvent,
+    rangeBoundingClientRect: window.Range.prototype.getBoundingClientRect, rangeClientRects: window.Range.prototype.getClientRects,
     show: dialog.show,
     showModal: dialog.showModal,
     close: dialog.close,
     setFormValue: window.ElementInternals.prototype.setFormValue,
+    isContentEditable: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "isContentEditable"),
     Request: window.Request,
     Response: window.Response
   }
@@ -505,4 +653,10 @@ test("an evaluated promise that waits on a timer and an animation frame resolves
   const value = await runner.evaluate(`new Promise(resolve => setTimeout(() => requestAnimationFrame(() => resolve("late")), 50))`)
 
   assert.equal(value, "late")
+})
+
+test("the page reports no touch support, as a desktop browser does", async () => {
+  await runner.load(`<p id="p">Page</p>`)
+
+  assert.deepEqual(await runner.evaluate(`["ontouchstart" in window, "ontouchend" in document, "ontouchmove" in p, navigator.maxTouchPoints]`), [false, false, false, 0])
 })

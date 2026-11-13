@@ -38,7 +38,7 @@ module RailsJsdom
 
     def initialize(url, protocols, cookie, &on_frame)
       server_io, @io = UNIXSocket.pair
-      status, = ActionCable.server.call(self.class.env(url, protocols, cookie, server_io))
+      status, = Rails.application.call(self.class.env(url, protocols, cookie, server_io))
       raise Refused, "the cable endpoint answered #{status}" if status != -1
 
       @protocol = handshake

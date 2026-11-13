@@ -99,6 +99,14 @@ module RailsJsdom
       assert_equal({ protocol: "actioncable-v1-json" }, open_socket("ws://www.example.com:3000/cable"))
     end
 
+    test "the upgrade is routed by the app, so a path the app does not route fails like a page request" do
+      assert_raises(ActionController::RoutingError) { open_socket("ws://www.example.com/nowhere") }
+    end
+
+    test "the upgrade passes through the app middleware before it reaches Action Cable" do
+      assert_equal({ protocol: "actioncable-v1-json" }, open_socket("ws://www.example.com/42/cable"))
+    end
+
     test "closing a socket Action Cable refused answers nothing" do
       ActionCable.server.config.allow_same_origin_as_host = false
       open_socket
