@@ -18,3 +18,8 @@
   <%= form.file_field :document, id: "plain_document" %>
   <%= form.submit "Upload without Turbo" %>
 <% end %>
+
+<section data-controller="file-picker">
+  <button type="button" data-action="file-picker#choose">Choose with a script</button>
+  <div data-file-picker-target="preview"></div>
+</section>

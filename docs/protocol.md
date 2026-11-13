@@ -21,7 +21,7 @@
 
 ## Requests to Rails
 
-While a command runs, the page may request URLs: its own `fetch` calls, link clicks, form submissions and Turbo visits. Node sends each as a `fetch` message:
+While a command runs, the page may request URLs: its own `fetch` and `XMLHttpRequest` calls, link clicks, form submissions and Turbo visits. Node sends each as a `fetch` message:
 
 | Field | Value |
 | --- | --- |
@@ -33,7 +33,7 @@ While a command runs, the page may request URLs: its own `fetch` calls, link cli
 Ruby answers with `{ "type": "fetch_response", "id": 7, "response": { … } }`. The response is either:
 
 - `{ "status": 200, "headers": { … }, "body": "…", "url": "…", "redirected": false }`. Rails has followed redirects already; `url` is the URL Rails requested last (the requested URL, or the target of the last redirect), as the browser saw it before any middleware rewrote the path, and `redirected` says whether there was a redirect. For a page navigation, Node loads `body` as the new page at `url`.
-- `{ "error": "…" }` when Rails will not answer, for example a URL on another host. The page's `fetch` rejects with a `TypeError`; a page navigation fails the command.
+- `{ "error": "…" }` when Rails will not answer, for example a URL on another host. The page's `fetch` rejects with a `TypeError`, an `XMLHttpRequest` fires `error` with status 0, and a page navigation fails the command.
 
 Requests from a page that has already been replaced are never sent.
 
@@ -55,8 +55,10 @@ Reads answer at once and do not change the page.
 | `stub_fetch` | `url` (full URL, or path and query), `response` | `null`. Later page requests to that URL get `response` without asking Rails, until the next `load`. |
 | `expect_modal` | `type` (`"alert"`, `"confirm"` or `"prompt"`), `accept`, `with` (prompt answer or `null`) | `null`. Dialogs of that type are answered until `modal_messages`. |
 | `modal_messages` | none | The messages of the dialogs shown since `expect_modal`. Stops expecting dialogs. |
+| `expect_file_chooser` | `files` (as for `attach`) | `null`. The next file field that a click opens a file chooser for, on the page or not, receives `files` as a timer on the virtual clock, and fires `input` and `change`. |
+| `file_chooser_opened` | none | Whether a file chooser opened since `expect_file_chooser`. Stops expecting one. |
 | `session` | `name` | `null`. Switches to that session's page and history; a new name starts with no page. |
-| `reset` | none | `null`. Closes every page and forgets every session, stub and expected dialog. Sent after each test. |
+| `reset` | none | `null`. Closes every page and forgets every session, stub, expected dialog and expected file chooser. Sent after each test. |
 
 ### Actions
 
