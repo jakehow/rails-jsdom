@@ -256,3 +256,10 @@ test("keys sent to a focused contenteditable whose selection is elsewhere type a
 
   assert.deepEqual([await read("e.textContent"), await read("p.textContent")], ["abc", "Elsewhere"])
 })
+
+test("Selenium's names for the arrow keys and return work as in system tests", async () => {
+  await runner.load(`<input id="a"><script>window.keys = []; a.addEventListener("keydown", event => keys.push(event.key))</script>`)
+  await type([key("arrow_left"), key("arrow_right"), key("arrow_up"), key("arrow_down"), key("return")], "#a")
+
+  assert.deepEqual(await read("keys"), ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter"])
+})
