@@ -1,11 +1,6 @@
 # Changelog
 
-## Unreleased
-
-- The runtime defines `CSS.escape`, so Turbo Frames load and links and forms inside them work. Thanks to [@anthonyfranco](https://github.com/anthonyfranco) (#1).
-- Tests fail when a jsdom upgrade adds one of the browser APIs the runtime stubs, so the stub can be removed.
-
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-12)
 
 - First release.
 - `bin/rails generate rails_jsdom:install` sets an app up: it requires the library, creates `test/interactions`, adds jsdom and esbuild to `package.json` and installs them, ignores `node_modules`, and checks the ActionCable test adapter. It pins jsdom and esbuild to a major version and sets `min-release-age=7` in `.npmrc`, warning when npm is too old to honour it.
