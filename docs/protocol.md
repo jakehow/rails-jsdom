@@ -98,7 +98,7 @@ An action fails if the page threw an error, rejected a promise, showed an unexpe
 
 ## Finding elements
 
-- **locator:** tried as a Stimulus action (`"menu#open"`), then as text (button and link text, or a field's label, placeholder, `name`, `id` or `aria-label`), then as a CSS selector. The first that matches anything wins.
+- **locator:** tried as a Stimulus action (`"menu#open"`), then as text (button and link text, a button's `name`, or a field's label, placeholder, `name`, `id` or `aria-label`), then as a CSS selector. The first that matches anything wins.
 - **match:** `"first"` picks the first of several matches. Otherwise several matches fail the command.
 - **scope:** an array of entries applied in turn. Each entry must match exactly one element:
   - `{ "css": "#cart" }`

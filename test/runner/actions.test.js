@@ -42,6 +42,22 @@ test("click finds an element by partial text, aria-label, title, id or button va
   assert.deepEqual(await read("hits"), ["partial", "aria", "title", "id", "value"])
 })
 
+test("click finds a button by its name, as system tests do", async () => {
+  await runner.load(`
+    <button name="log_in" onclick="hits.push('button'); return false"><span>Go</span></button>
+    <input type="submit" name="save" value="Keep" onclick="hits.push('input'); return false">
+    <script>window.hits = []</script>`)
+  for (const locator of ["log_in", "save"]) await act("click", locator)
+
+  assert.deepEqual(await read("hits"), ["button", "input"])
+})
+
+test("click does not find a link by its name, as system tests do not", async () => {
+  await runner.load(`<a href="#" name="log_out">Leave</a>`)
+
+  await assert.rejects(act("click", "log_out"), /unable to find "log_out"/)
+})
+
 test("click falls back to a CSS selector, and an invalid selector finds nothing", async () => {
   await runner.load(`<p class="tap" onclick="window.hit = true">Text</p>`)
   await act("click", "p.tap")
