@@ -7,4 +7,5 @@
 - [Instructions for coding agents](https://jakehow.github.io/rails-jsdom/agents.md): set up the gem, write interaction tests, convert a system test suite, and the table of system test methods.
 - [API reference](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html): every helper, with locator rules, filters, scoping, dialogs and settling.
 - [README](https://github.com/jakehow/rails-jsdom#readme): how it works and the trade-offs against system tests.
+- [Results on 37signals' apps](https://jakehow.github.io/rails-jsdom/docs/reference_apps_md.html): timings against system tests on Campfire, Fizzy and Writebook, and why some tests stay system tests.
 - [Runtime protocol](https://jakehow.github.io/rails-jsdom/protocol.md): the messages between the Ruby bridge and the Node runtime, for contributors.
