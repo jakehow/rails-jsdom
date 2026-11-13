@@ -26,8 +26,8 @@ Gem::Specification.new do |spec|
   spec.extra_rdoc_files = [ "README.md", "CHANGELOG.md", "LICENSE" ]
   spec.rdoc_options = [ "--main", "README.md", "--markup", "markdown", "--title", "rails-jsdom" ]
 
-  spec.add_dependency "actioncable", ">= 7.1"
-  spec.add_dependency "actionpack", ">= 7.1"
+  spec.add_dependency "actioncable", ">= 8.1"
+  spec.add_dependency "actionpack", ">= 8.1"
   spec.add_dependency "importmap-rails", ">= 2.0"
   spec.add_dependency "nokogiri", ">= 1.15"
   spec.add_dependency "propshaft", ">= 1.0"
