@@ -250,4 +250,24 @@ class FinderInteractionTest < RailsJsdom::TestCase
     assert_equal "Forms", page.title
     within("#prices") { assert_equal "Prices Mug Choose", page.text }
   end
+
+  test "find without a selector uses the id and class filters, as in system tests" do
+    mount_html CLASSED
+
+    assert_equal [ "Read", "Unread", "invite" ], [ find(id: "room_1").text, find(class: [ "room", "unread" ]).text, find(id: "invite_url").value ]
+  end
+
+  test "a class filter starting with ! excludes elements with that class" do
+    mount_html CLASSED
+
+    assert_equal [ "Read" ], all(class: [ "room", "!unread" ]).map(&:text)
+  end
+
+  test "an id filter takes a Regexp, and assertions take id and class filters" do
+    mount_html CLASSED
+
+    assert_selector "a", class: "unread", id: /\Aroom_/, count: 1
+  end
+
+  CLASSED = %(<a id="room_1" class="room" href="#">Read</a><a id="room_2" class="room unread" href="#">Unread</a><input id="invite_url" value="invite">).freeze
 end

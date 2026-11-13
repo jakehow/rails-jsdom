@@ -305,8 +305,8 @@ module RailsJsdom
     # `match: :first`.
     #
     #   find(".cart-item", text: "Mug").click
-    def find(selector, match: nil, **filters)
-      rails_jsdom_find(Query.new("css", selector, **filters), match)
+    def find(selector = nil, match: nil, **filters)
+      rails_jsdom_find(Query.new("css", selector || "*", **filters), match)
     end
 
     # The one field found by `locator` (see Locators) that matches the
@@ -331,14 +331,14 @@ module RailsJsdom
     # none.
     #
     #   all(".cart-item").map(&:text)
-    def all(selector, **filters)
-      rails_jsdom_elements(Query.new("css", selector, **filters))
+    def all(selector = nil, **filters)
+      rails_jsdom_elements(Query.new("css", selector || "*", **filters))
     end
 
     # The first element that matches the CSS `selector` and the filters.
     # Raises RailsJsdom::Error when none matches.
-    def first(selector, **filters)
-      rails_jsdom_find(Query.new("css", selector, **filters), :first)
+    def first(selector = nil, **filters)
+      rails_jsdom_find(Query.new("css", selector || "*", **filters), :first)
     end
 
     # Runs `script` in the page, settles it and returns the script's value,

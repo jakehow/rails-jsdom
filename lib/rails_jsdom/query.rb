@@ -8,17 +8,30 @@ module RailsJsdom
       expected.is_a?(Regexp) ? actual.match?(expected) : actual.include?(expected.to_s)
     end
 
+    def self.flag?(actual, expected)
+      expected == :all || actual == expected
+    end
+
+    def self.classes?(actual, expected)
+      expected.all? { |name| class_matches?(actual, name) }
+    end
+
+    def self.class_matches?(actual, name)
+      name.start_with?("!") ? actual.exclude?(name.delete_prefix("!")) : actual.include?(name)
+    end
+
     def self.same?(actual, expected)
       expected.is_a?(Regexp) ? actual.match?(expected) : actual == expected.to_s
     end
 
-    def initialize(strategy, locator, text: nil, exact_text: nil, visible: true, with: nil, checked: nil, unchecked: nil, disabled: nil, href: nil, type: nil, **unknown)
-      RailsJsdom.reject_options(unknown.keys)
+    def initialize(strategy, locator, text: nil, exact_text: nil, visible: true, with: nil, checked: nil, unchecked: nil, disabled: nil, href: nil, type: nil, id: nil, **others)
+      classes = others.delete(:class)
+      RailsJsdom.reject_options(others.keys)
       @strategy = strategy
       @locator = locator
       @visible = visible
       disabled = false if disabled.nil? && DISABLED_BY_DEFAULT.include?(strategy)
-      @filters = { text: text, exact_text: exact_text, with: with, checked: checked, unchecked: unchecked, disabled: disabled, href: href, type: type }.compact
+      @filters = { text: text, exact_text: exact_text, with: with, checked: checked, unchecked: unchecked, disabled: disabled, href: href, type: type, id: id, class: classes && Array(classes) }.compact
     end
 
     def message
@@ -55,7 +68,9 @@ module RailsJsdom
       when :text
         Query.like?(actual, expected)
       when :checked, :unchecked, :disabled
-        expected == :all || actual == expected
+        Query.flag?(actual, expected)
+      when :class
+        Query.classes?(actual, expected)
       else
         Query.same?(actual, expected)
       end
@@ -69,9 +84,12 @@ module RailsJsdom
         checked: descriptor.fetch("checked"),
         unchecked: !descriptor.fetch("checked"),
         disabled: descriptor.fetch("disabled"),
-        href: descriptor.fetch("attributes")["href"].to_s,
         type: descriptor.fetch("type")
-      }
+      }.merge(attribute_values(descriptor.fetch("attributes")))
+    end
+
+    def attribute_values(attributes)
+      { href: attributes["href"].to_s, id: attributes["id"].to_s, class: attributes["class"].to_s.split }
     end
   end
 end
