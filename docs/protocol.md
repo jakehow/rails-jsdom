@@ -61,6 +61,7 @@ Reads answer at once and do not change the page.
 | `query` | `strategy` (`"css"`, `"field"`, `"button"` or `"link"`), `locator` (or `null` for every element of that kind), *scope* | An array of [element descriptions](#element-descriptions) |
 | `read` | `handle` | One element description |
 | `stub_fetch` | `url` (full URL, or path and query), `response` | `null`. Later page requests to that URL get `response` without asking Rails, until the next `load`. |
+| `stub_layout` | `selector`, `box` (`width`, `height`, `top`, `left`) | `null`. Elements matching `selector`, anything inside them and ranges that start inside them measure as `box` until the next `load` |
 | `expect_modal` | `type` (`"alert"`, `"confirm"` or `"prompt"`), `accept`, `with` (prompt answer or `null`) | `null`. Dialogs of that type are answered until `modal_messages`. |
 | `modal_messages` | none | The messages of the dialogs shown since `expect_modal`. Stops expecting dialogs. |
 | `expect_file_chooser` | `files` (as for `attach`) | `null`. The next file field that a click opens a file chooser for, on the page or not, receives `files` as a timer on the virtual clock, and fires `input` and `change`. |

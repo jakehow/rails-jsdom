@@ -699,3 +699,34 @@ test("measuring layout again in later turns of the event loop is fine", async ()
 
   assert.equal(result, 3)
 })
+
+test("stub_layout gives matching elements, their contents and ranges inside them a box, and other elements none", async () => {
+  await runner.load(`<div id="editor"><p id="p">Text</p></div><div id="other"></div>`)
+  await runner.run({ command: "stub_layout", selector: "#editor", box: { width: 100, height: 20, top: 5, left: 7 } })
+  const result = await runner.evaluate(`(() => {
+    const range = document.createRange()
+    range.setStart(p.firstChild, 2)
+    const box = rect => [rect.left, rect.top, rect.width, rect.height]
+    return [box(editor.getBoundingClientRect()), box(p.getBoundingClientRect()), box(range.getBoundingClientRect()), p.getClientRects().length, box(other.getBoundingClientRect()), other.getClientRects().length]
+  })()`)
+
+  assert.deepEqual(result, [[7, 5, 100, 20], [7, 5, 100, 20], [7, 5, 100, 20], 1, [0, 0, 0, 0], 0])
+})
+
+test("a page that waits for a real measurement stops once stub_layout gives it a box, and the next page has no stubs", async () => {
+  await runner.load(`<div id="menu"></div><script>
+    new MutationObserver(() => {
+      if (menu.getBoundingClientRect().width === 0) menu.append(document.createElement("span"))
+    }).observe(menu, { childList: true })
+  </script>`)
+  await runner.run({ command: "stub_layout", selector: "#menu", box: { width: 10, height: 10, top: 1, left: 1 } })
+  await runner.evaluate("menu.append(document.createElement('span'))")
+  const count = await runner.evaluate("menu.children.length")
+  await runner.load(`<div id="menu"></div>`, `${HOST}/next`)
+
+  assert.deepEqual([count, await runner.evaluate("menu.getBoundingClientRect().width")], [1, 0])
+})
+
+test("stub_layout before a page is loaded fails", async () => {
+  await assert.rejects(runner.run({ command: "stub_layout", selector: "p", box: { width: 1, height: 1, top: 0, left: 0 } }), /visit a page or mount a partial first/)
+})

@@ -198,6 +198,13 @@ class SystemTestMethodsInteractionTest < RailsJsdom::TestCase
     assert_equal [ "H1", "yes" ], [ heading.evaluate_script("this.tagName"), heading["data-seen"] ]
   end
 
+  test "stub_layout gives the elements a box of the given size, which measuring code then reads" do
+    visit forms_path
+    stub_layout "h1", width: 300, height: 40
+
+    assert_equal [ 300, 40, 10, 10 ], evaluate_script("(r => [r.width, r.height, r.top, r.left])(document.querySelector('h1').getBoundingClientRect())")
+  end
+
   test "refresh loads the current URL again" do
     visit forms_path
     execute_script("document.querySelector('h1').textContent = 'Changed'")

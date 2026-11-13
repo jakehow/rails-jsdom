@@ -57,7 +57,7 @@ end
 Work through `test/system/` one file at a time.
 
 1. **Sort each test.** Convert it if it checks behaviour: what the page shows, what is hidden, where it navigates, what Rails receives. Keep it as a system test, or delete it, if it needs what jsdom cannot do:
-   - computed CSS, layout or geometry;
+   - computed CSS, layout or geometry (a test that only fails because a library waits for a real measurement, such as an editor positioning a menu at the caret, can stay an interaction test with `stub_layout` on the elements involved);
    - CSS media-query breakpoints;
    - screenshots;
    - drag and drop;

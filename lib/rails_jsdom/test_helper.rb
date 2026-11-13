@@ -133,6 +133,18 @@ module RailsJsdom
       RailsJsdom.bridge.call(command: "stub_fetch", url: url, response: { status: status, headers: headers, body: body })
     end
 
+    # Gives elements matching `selector`, anything inside them, and text ranges
+    # that start inside them the box `width` by `height` at `left`, `top`,
+    # instead of the 0x0 box at 0,0 that jsdom gives everything, until the next
+    # page load. For a test whose page waits for a real measurement, such as an
+    # editor that positions a menu at the caret, when where things are does not
+    # matter to the test. Call it after the page is loaded.
+    #
+    #   stub_layout "#composer .lexxy-editor__content"
+    def stub_layout(selector, width: 100, height: 20, top: 10, left: 10)
+      RailsJsdom.bridge.call(command: "stub_layout", selector: selector, box: { width: width, height: height, top: top, left: left })
+    end
+
     # The page: an object with every helper in this module, plus
     # RailsJsdom::Page#body and RailsJsdom::Page#title.
     def page
