@@ -719,8 +719,14 @@ module RailsJsdom
     end
 
     def rails_jsdom_undelivered_broadcasts
-      streams = RailsJsdom.bridge.call(command: "streams").filter_map { |name| Turbo::StreamsChannel.verified_stream_name(name) }.uniq
-      rails_jsdom_deliveries.undelivered_messages(rails_jsdom_session_name, streams)
+      rails_jsdom_deliveries.undelivered_messages(rails_jsdom_session_name, rails_jsdom_confirmed_streams.values.uniq)
+    end
+
+    def rails_jsdom_confirmed_streams
+      sources = RailsJsdom.bridge.call(command: "streams")
+      verified = sources.to_h { |source| [ source.fetch("name"), RailsJsdom.verified_stream(source["channel"], source.fetch("name")) ] }.compact
+      RailsJsdom.bridge.call(command: "confirm", names: verified.keys) if verified.any?
+      verified
     end
 
     def rails_jsdom_deliveries

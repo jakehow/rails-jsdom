@@ -249,7 +249,7 @@ test "a new comment appears for everyone watching the task" do
 end
 ```
 
-After each action (and before each assertion), the runner finds the page's `<turbo-cable-stream-source>` elements, verifies each signed stream name with `Turbo::StreamsChannel.verified_stream_name`, reads the broadcasts recorded by the ActionCable `test` adapter, and applies new Turbo Stream messages with `Turbo.renderStreamMessage`. Broadcasts made before the page subscribed are skipped, forged stream names receive nothing, and each broadcast is applied once. `broadcast_*_later` broadcasts arrive when the test performs the jobs.
+After each action (and before each assertion), the runner finds the page's `<turbo-cable-stream-source>` elements, verifies each signed stream name with the `verified_stream_name` of the channel the element names (`Turbo::StreamsChannel` when it names none), marks verified elements `connected` as Turbo does once a subscription is confirmed, reads the broadcasts recorded by the ActionCable `test` adapter, and applies new Turbo Stream messages with `Turbo.renderStreamMessage`. Broadcasts made before the page subscribed are skipped, forged stream names receive nothing, and each broadcast is applied once. `broadcast_*_later` broadcasts arrive when the test performs the jobs. A channel that cannot verify stream names receives nothing. The channel's `subscribed` method is not run, so authorization it does there, such as rejecting a user who is not a member, does not stop delivery; test it with an `ActionCable::Channel::TestCase`.
 
 Your test environment must use the ActionCable `test` adapter (`config/cable.yml`: `test: adapter: test`), which is the Rails default.
 

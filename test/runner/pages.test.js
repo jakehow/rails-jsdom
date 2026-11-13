@@ -367,13 +367,24 @@ test("delivered Turbo Stream messages go to Turbo", async () => {
   assert.equal((await runner.snapshot()).text, "Page One Two")
 })
 
-test("stream sources list their signed stream names for Turbo's channel only", async () => {
+test("stream sources list their channel and signed stream name", async () => {
   await runner.load(`
     <turbo-cable-stream-source channel="Turbo::StreamsChannel" signed-stream-name="a"></turbo-cable-stream-source>
     <turbo-cable-stream-source signed-stream-name="b"></turbo-cable-stream-source>
     <turbo-cable-stream-source channel="ChatChannel" signed-stream-name="c"></turbo-cable-stream-source>`)
 
-  assert.deepEqual(await runner.run({ command: "streams" }), ["a", "b"])
+  assert.deepEqual(await runner.run({ command: "streams" }), [{ channel: "Turbo::StreamsChannel", name: "a" }, { channel: null, name: "b" }, { channel: "ChatChannel", name: "c" }])
+})
+
+test("confirmed stream sources are marked connected, as Turbo marks a confirmed subscription", async () => {
+  await runner.load(`
+    <turbo-cable-stream-source signed-stream-name="a"></turbo-cable-stream-source>
+    <turbo-cable-stream-source signed-stream-name="b" connected="was"></turbo-cable-stream-source>
+    <turbo-cable-stream-source signed-stream-name="c"></turbo-cable-stream-source>`)
+  await runner.run({ command: "confirm", names: ["a", "b"] })
+  const result = await runner.evaluate(`[...document.querySelectorAll("turbo-cable-stream-source")].map(source => source.getAttribute("connected"))`)
+
+  assert.deepEqual(result, ["", "was", null])
 })
 
 const FORM_ASSOCIATED = `<script>

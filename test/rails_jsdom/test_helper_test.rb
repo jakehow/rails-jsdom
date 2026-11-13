@@ -95,7 +95,7 @@ module RailsJsdom
     end
 
     test "#page_text delivers a broadcast made after the page subscribed" do
-      messages = bridge_recording([ Turbo::StreamsChannel.signed_stream_name(name) ])
+      messages = bridge_recording([ { "channel" => nil, "name" => Turbo::StreamsChannel.signed_stream_name(name) } ])
       @helper.page_text
       Turbo::StreamsChannel.broadcast_append_to(name, target: "items", html: "<p>Hi</p>")
       @helper.page_text
@@ -104,7 +104,7 @@ module RailsJsdom
     end
 
     test "#page_text leaves out a broadcast made before the page subscribed" do
-      messages = bridge_recording([ Turbo::StreamsChannel.signed_stream_name(name) ])
+      messages = bridge_recording([ { "channel" => nil, "name" => Turbo::StreamsChannel.signed_stream_name(name) } ])
       Turbo::StreamsChannel.broadcast_append_to(name, target: "items", html: "<p>Hi</p>")
       @helper.page_text
 
@@ -112,7 +112,7 @@ module RailsJsdom
     end
 
     test "#page_text delivers each broadcast once" do
-      messages = bridge_recording([ Turbo::StreamsChannel.signed_stream_name(name) ])
+      messages = bridge_recording([ { "channel" => nil, "name" => Turbo::StreamsChannel.signed_stream_name(name) } ])
       @helper.page_text
       Turbo::StreamsChannel.broadcast_append_to(name, target: "items", html: "<p>Hi</p>")
       @helper.page_text
@@ -122,7 +122,7 @@ module RailsJsdom
     end
 
     test "#page_text ignores a stream source with a forged signature" do
-      messages = bridge_recording([ "forged--signature" ])
+      messages = bridge_recording([ { "channel" => nil, "name" => "forged--signature" } ])
       @helper.page_text
       Turbo::StreamsChannel.broadcast_append_to(name, target: "items", html: "<p>Hi</p>")
       @helper.page_text
@@ -131,7 +131,7 @@ module RailsJsdom
     end
 
     test "#page_text ignores a broadcast that is not a Turbo Stream" do
-      messages = bridge_recording([ Turbo::StreamsChannel.signed_stream_name(name) ])
+      messages = bridge_recording([ { "channel" => nil, "name" => Turbo::StreamsChannel.signed_stream_name(name) } ])
       @helper.page_text
       ActionCable.server.broadcast(name, { "custom" => true })
       @helper.page_text

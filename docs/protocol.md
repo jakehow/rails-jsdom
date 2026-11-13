@@ -51,7 +51,7 @@ Reads answer at once and do not change the page.
 | `snapshot` | *scope* | `{ html, text, url, title }`: the HTML and visible text of the page or scope, and the page's URL and title |
 | `query` | `strategy` (`"css"`, `"field"`, `"button"` or `"link"`), `locator` (or `null` for every element of that kind), *scope* | An array of [element descriptions](#element-descriptions) |
 | `read` | `handle` | One element description |
-| `streams` | none | The signed stream names of the page's `<turbo-cable-stream-source>` elements for Turbo's channel |
+| `streams` | none | `{ channel, name }` for each `<turbo-cable-stream-source>` on the page: its `channel` attribute (or `null`) and signed stream name |
 | `stub_fetch` | `url` (full URL, or path and query), `response` | `null`. Later page requests to that URL get `response` without asking Rails, until the next `load`. |
 | `expect_modal` | `type` (`"alert"`, `"confirm"` or `"prompt"`), `accept`, `with` (prompt answer or `null`) | `null`. Dialogs of that type are answered until `modal_messages`. |
 | `modal_messages` | none | The messages of the dialogs shown since `expect_modal`. Stops expecting dialogs. |
@@ -83,6 +83,7 @@ An action fails if the page threw an error, rejected a promise, showed an unexpe
 | `traverse` | `delta` (`-1` or `1`) | Goes back or forward through Turbo history entries, then through full page loads |
 | `evaluate` | `script` | Runs the script in the page. Result: its value, awaited if it is a promise. |
 | `deliver` | `messages` | Renders each Turbo Stream message with `Turbo.renderStreamMessage` |
+| `confirm` | `names` | Marks the stream sources with these signed stream names `connected` |
 
 ## Setup
 

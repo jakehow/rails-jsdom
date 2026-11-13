@@ -50,6 +50,11 @@ module RailsJsdom
       Rails.application.importmap.directories.values.to_h { |directory| [ directory.under, Rails.root.join(directory.dir).to_s ] }
     end
 
+    def verified_stream(channel, signed_name)
+      channel_class = channel.present? ? channel.safe_constantize : Turbo::StreamsChannel
+      channel_class.verified_stream_name(signed_name) if channel_class.respond_to?(:verified_stream_name)
+    end
+
     def keys(keys)
       keys.map { |key| key.is_a?(Array) ? key_entry(key.last).merge(modifiers: key[0...-1].map(&:to_s)) : key_entry(key) }
     end
