@@ -43,8 +43,8 @@ end
 ## How it works
 
 1. Each test worker starts **one persistent Node process** running jsdom. It stays up for the whole run.
-2. On start, Node bundles every Stimulus controller under `app/javascript/controllers` once with [esbuild](https://esbuild.github.io), resolving `@hotwired/turbo-rails`, `@hotwired/stimulus` and your other pins through your app's importmap and Propshaft load path. The versions under test are exactly the ones your app ships.
-3. `visit` makes a real integration request (`get`), follows redirects, and loads the response HTML into a fresh jsdom window at the request's URL. Turbo and Stimulus boot; controllers connect.
+2. On start, Node bundles your importmap's `application` module and every Stimulus controller under `app/javascript/controllers` once with [esbuild](https://esbuild.github.io), resolving `@hotwired/turbo-rails`, `@hotwired/stimulus` and your other pins through your app's importmap and Propshaft load path. The versions under test are exactly the ones your app ships.
+3. `visit` makes a real integration request (`get`), follows redirects, and loads the response HTML into a fresh jsdom window at the request's URL. Your `application` module runs, as `javascript_importmap_tags` runs it in a browser, so its initializers and globals are there; Turbo and Stimulus boot; controllers connect. `@hotwired/stimulus-loading` is replaced: the runner registers each controller when the page first uses it.
 4. Every `fetch` the page makes — your controllers' own calls, Turbo Drive visits, Turbo form submissions, Turbo Frames — is sent back to Ruby and answered by Rails **in-process**, with the test's cookies and session, following redirects. Turbo then renders the response exactly as it would in a browser, including Turbo Stream responses.
 5. After every action, the runner **settles** the page deterministically: it runs timers on a virtual clock and waits until no Rails request is pending.
 6. Assertions read a snapshot of the live DOM: `assert_dom`, `assert_select` and `css_select` work as in any Rails test because `document_root_element` is the page.
