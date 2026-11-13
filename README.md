@@ -379,7 +379,14 @@ bundle exec rubocop
 2. The Node tests for the runtime and the ESLint rule (`bundle exec rake test_runner`).
 3. The Ruby tests.
 
-CI runs the same, plus RuboCop.
+CI runs the same, plus RuboCop, on each supported Ruby with the latest Rails release. One more CI job runs it on Ruby 4.0 with edge Rails, from `gemfiles/rails_edge.gemfile`. To run it locally:
+
+```bash
+BUNDLE_GEMFILE=gemfiles/rails_edge.gemfile bundle install
+BUNDLE_GEMFILE=gemfiles/rails_edge.gemfile bundle exec rake test
+```
+
+The edge Gemfile's lockfile is not committed, so each run tests the current Rails `main`. Ruby coverage is measured, and held at 100%, only with the released Rails. The Rails 8.1 and edge Rails Action Cable paths each run for real in their own job.
 
 This repository's own `.npmrc` sets `min-release-age=7` too, so `npm install` here skips releases from the last 7 days. Use npm 11.10 or later when you change `package.json`.
 
