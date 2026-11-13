@@ -283,7 +283,7 @@ Each parallel test worker starts its own Node process the first time it runs an 
 
 See [what you lose](#trade-offs-compared-with-system-tests). In addition:
 
-- jsdom lacks some browser APIs. The runtime stubs the common ones so controllers keep working: `matchMedia` (never matches), `IntersectionObserver` and `ResizeObserver` (never report), `scrollTo` and `scrollIntoView` (do nothing), `navigator.clipboard` (writes are dropped, reads are empty), `CSS.escape` and `<dialog>` `show`, `showModal` and `close`. A page that needs another missing API needs a small stub in your controller or test.
+- jsdom lacks some browser APIs. The runtime stubs the common ones so controllers keep working: `matchMedia` (never matches), `IntersectionObserver` and `ResizeObserver` (never report), `scrollTo` and `scrollIntoView` (do nothing), `navigator.clipboard` (writes are dropped, reads are empty), `CSS.escape`, `<dialog>` `show`, `showModal` and `close`, and form participation for form-associated custom elements (`ElementInternals` `form`, `setFormValue`, `setValidity` and `validity`; their values are part of `new FormData(form)`). A page that needs another missing API needs a small stub in your controller or test.
 - Stimulus outlets are not tested yet.
 
 ## Development

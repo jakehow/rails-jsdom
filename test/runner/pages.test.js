@@ -123,6 +123,7 @@ test("jsdom still lacks the browser APIs the runtime adds", () => {
     show: dialog.show,
     showModal: dialog.showModal,
     close: dialog.close,
+    setFormValue: window.ElementInternals.prototype.setFormValue,
     Request: window.Request,
     Response: window.Response
   }
@@ -373,4 +374,37 @@ test("stream sources list their signed stream names for Turbo's channel only", a
     <turbo-cable-stream-source channel="ChatChannel" signed-stream-name="c"></turbo-cable-stream-source>`)
 
   assert.deepEqual(await runner.run({ command: "streams" }), ["a", "b"])
+})
+
+const FORM_ASSOCIATED = `<script>
+  customElements.define("x-editor", class extends HTMLElement {
+    static formAssociated = true
+    constructor() { super(); this.internals = this.attachInternals() }
+  })
+</script>`
+
+test("a form-associated custom element's value is part of its form's data", async () => {
+  await runner.load(`${FORM_ASSOCIATED}
+    <form id="f"><input name="title" value="Hi"><x-editor name="body"></x-editor><x-editor name="off" disabled></x-editor><x-editor name="blank"></x-editor></form>
+    <x-editor name="linked" form="f"></x-editor><x-editor name="outside"></x-editor>`)
+  const result = await runner.evaluate(`(() => {
+    for (const editor of document.querySelectorAll("x-editor:not([name=blank])")) editor.internals.setFormValue(editor.getAttribute("name") + " value")
+    return [...new FormData(document.getElementById("f")).entries()]
+  })()`)
+
+  assert.deepEqual(result, [["title", "Hi"], ["body", "body value"], ["linked", "linked value"]])
+})
+
+test("a form-associated custom element knows its form and reports the validity it sets", async () => {
+  await runner.load(`${FORM_ASSOCIATED}<form id="f"><x-editor name="body"></x-editor></form>`)
+  const result = await runner.evaluate(`(() => {
+    const { internals } = document.querySelector("x-editor")
+    const before = [internals.form.id, internals.validity.valid, internals.willValidate, internals.checkValidity(), new FormData().has("body")]
+    internals.setValidity({ valueMissing: true }, "Required")
+    const invalid = [internals.validity.valueMissing, internals.validationMessage, internals.reportValidity()]
+    internals.setValidity({})
+    return [...before, ...invalid, internals.validity.valid, internals.validationMessage]
+  })()`)
+
+  assert.deepEqual(result, ["f", true, true, true, false, true, "Required", false, true, ""])
 })
