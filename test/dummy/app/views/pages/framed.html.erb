@@ -1,4 +1,5 @@
 <% content_for :title, "Framed" %>
+<p id="outside">Outside <%= params.fetch(:step, 1) %></p>
 <turbo-frame id="panel">
   <p id="step">Step <%= params.fetch(:step, 1) %></p>
   <%= link_to "Next step", framed_path(step: 2) %>

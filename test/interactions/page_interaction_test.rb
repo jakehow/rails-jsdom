@@ -33,7 +33,7 @@ class PageInteractionTest < RailsJsdom::TestCase
     click_on "Next step"
 
     assert_dom "#step", text: "Step 2"
-    assert_equal "/framed", current_path
+    assert_dom "#outside", text: "Outside 1"
   end
 
   test "a page fetch reaches Rails in the test's session" do

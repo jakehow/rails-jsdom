@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The runtime defines `CSS.escape`, so Turbo Frames load and links and forms inside them work. Thanks to [@anthonyfranco](https://github.com/anthonyfranco) (#1).
+- Tests fail when a jsdom upgrade adds one of the browser APIs the runtime stubs, so the stub can be removed.
+
 ## 0.1.0 (unreleased)
 
 - First release.
