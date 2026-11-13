@@ -332,13 +332,15 @@ module RailsJsdom
     # awaited if it is a promise. The value must be JSON-serialisable.
     #
     #   evaluate_script("document.title") # => "Projects"
-    def evaluate_script(script)
-      rails_jsdom_perform(command: "evaluate", script: script)
+    def evaluate_script(script, *arguments)
+      rails_jsdom_script(script, arguments, "expression")
     end
 
-    # Runs `script` in the page and settles it, returning nothing.
-    def execute_script(script)
-      evaluate_script(script)
+    # Runs `script` in the page and settles it, returning nothing. As in
+    # system tests, extra arguments are available to the script as
+    # `arguments`; an element from `find` arrives as that DOM element.
+    def execute_script(script, *arguments)
+      rails_jsdom_script(script, arguments, "statements")
       nil
     end
 
@@ -602,6 +604,18 @@ module RailsJsdom
     def document_root_element
       html = rails_jsdom_snapshot.fetch("html")
       rails_jsdom_scope.empty? ? Nokogiri::HTML5(html).root : Nokogiri::HTML5.fragment(html, context: "template").element_children.first
+    end
+
+    def rails_jsdom_script(script, arguments, kind, receiver = nil) # :nodoc:
+      if arguments.empty? && receiver.nil?
+        rails_jsdom_perform(command: "evaluate", script: script)
+      else
+        rails_jsdom_perform(command: "evaluate", script: script, kind: kind, receiver: receiver, args: arguments.map { |argument| rails_jsdom_script_value(argument) })
+      end
+    end
+
+    def rails_jsdom_script_value(argument) # :nodoc:
+      argument.is_a?(Element) ? { rails_jsdom_element: argument.handle } : argument
     end
 
     def rails_jsdom_element(handle, action, **options) # :nodoc:

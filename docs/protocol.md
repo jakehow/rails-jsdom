@@ -81,7 +81,7 @@ An action fails if the page threw an error, rejected a promise, showed an unexpe
 | `send_keys` | `keys` | Types into the focused element. See [Keys](#keys). |
 | `element` | `handle`, `action`, `value` (for `set`), `keys` (for `send_keys`) | Runs `click`, `hover`, `double_click`, `right_click`, `set`, `select_option`, `unselect_option` or `send_keys` on that element |
 | `traverse` | `delta` (`-1` or `1`) | Goes back or forward through Turbo history entries, then through full page loads |
-| `evaluate` | `script` | Runs the script in the page. Result: its value, awaited if it is a promise. |
+| `evaluate` | `script`, optional `kind` (`"expression"` or `"statements"`), `receiver` (a handle or `null`) and `args` (an element arrives for `{ "rails_jsdom_element": handle }`) | Runs the script in the page. Result: its value, awaited if it is a promise. |
 | `deliver` | `messages` | Renders each Turbo Stream message with `Turbo.renderStreamMessage` |
 | `confirm` | `names` | Marks the stream sources with these signed stream names `connected` |
 

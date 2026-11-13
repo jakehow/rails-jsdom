@@ -419,3 +419,12 @@ test("a form-associated custom element knows its form and reports the validity i
 
   assert.deepEqual(result, ["f", true, true, true, false, true, "Required", false, true, ""])
 })
+
+test("evaluate with a kind runs the script as a function, with its arguments, receiver and elements", async () => {
+  await runner.load(`<p id="p">Page</p>`)
+  const [{ handle }] = await runner.run({ command: "query", strategy: "css", locator: "#p", scope: [] })
+  const value = await runner.run({ command: "evaluate", script: "arguments[0].id + arguments[1] + (arguments[2] === null)", kind: "expression", receiver: null, args: [{ rails_jsdom_element: handle }, "!", null] })
+  const statements = await runner.run({ command: "evaluate", script: "this.dataset.seen = arguments[0]; return this.dataset.seen", kind: "statements", receiver: handle, args: ["yes"] })
+
+  assert.deepEqual([value, statements], ["p!true", "yes"])
+})

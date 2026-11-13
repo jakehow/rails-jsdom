@@ -177,6 +177,27 @@ class SystemTestMethodsInteractionTest < RailsJsdom::TestCase
     assert_nil execute_script("document.title = 'Changed'; 42")
   end
 
+  test "execute_script passes extra arguments, with an element from find arriving as that DOM element" do
+    visit forms_path
+    execute_script("arguments[0].textContent = arguments[1] + arguments[2].count", find("h1"), "Changed ", { "count" => 2 })
+
+    assert_dom "h1", text: "Changed 2"
+  end
+
+  test "evaluate_script with arguments evaluates an expression and returns its value" do
+    visit forms_path
+
+    assert_equal "Forms!", evaluate_script("arguments[0].textContent + arguments[1]", find("h1"), "!")
+  end
+
+  test "an element runs a script with this set to that element" do
+    visit forms_path
+    heading = find("h1")
+    heading.execute_script("this.dataset.seen = arguments[0]", "yes")
+
+    assert_equal [ "H1", "yes" ], [ heading.evaluate_script("this.tagName"), heading["data-seen"] ]
+  end
+
   test "refresh loads the current URL again" do
     visit forms_path
     execute_script("document.querySelector('h1').textContent = 'Changed'")

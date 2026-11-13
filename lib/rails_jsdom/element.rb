@@ -34,6 +34,18 @@ module RailsJsdom
       @handle = handle
     end
 
+    # Runs `script` in the page with `this` set to the element, as in system
+    # tests. Extra arguments are available as `arguments`.
+    def execute_script(script, *arguments)
+      @test.rails_jsdom_script(script, arguments, "statements", handle)
+      nil
+    end
+
+    # Evaluates `script` with `this` set to the element and returns its value.
+    def evaluate_script(script, *arguments)
+      @test.rails_jsdom_script(script, arguments, "expression", handle)
+    end
+
     ##
     # Clicks the element.
     action :click
