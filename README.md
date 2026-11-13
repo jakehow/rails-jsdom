@@ -78,7 +78,7 @@ Layout assertions are brittle in any case; prefer asserting behaviour — what i
 These work through the library imitating the browser, so the parts that depend on layout or the platform stay out of reach:
 
 - **Keyboard input.** `send_keys` performs the common browser actions itself: typing and Backspace at the end of a text field, Enter submitting a form or pressing a focused button or link, Space pressing a focused button or checkbox, Tab and Shift+Tab moving focus, and the arrow keys, Home and End stepping a range or number field. In a contenteditable, such as a rich text editor, each key fires `beforeinput` and `input` with the standard input type (`insertText`, `deleteContentBackward`, `insertParagraph`, `insertLineBreak`); if the editor does not cancel `beforeinput`, the character is inserted, or Backspace deletes, at the caret. As in system tests, typing into an element that does not have focus puts the caret after its content. Moving the caret with keys, selecting text, IME input and OS shortcuts are not supported.
-- **Several users at once.** `using_session` gives each user their own cookies and page, and Turbo Stream broadcasts reach every page that subscribed. Pages do not run at the same time: a page receives what happened while it was in the background when the test returns to it.
+- **Several users at once.** `using_session` gives each user their own cookies and page, and their own `localStorage` and `sessionStorage`, which last across page loads as in one browser tab, and Turbo Stream broadcasts reach every page that subscribed. Pages do not run at the same time: a page receives what happened while it was in the background when the test returns to it.
 
 **Not supported yet**
 
