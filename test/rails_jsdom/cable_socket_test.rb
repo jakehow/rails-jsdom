@@ -132,6 +132,17 @@ module RailsJsdom
       assert_match(/\ARuntimeError: command failed was raised in Action Cable code while handling the page's command \{"do":"crash"\}/, reported_failure)
     end
 
+    test "a command Action Cable cannot route is logged, as Action Cable logs it, and fails nothing" do
+      routing_error = Class.new(StandardError)
+      routing_error.stubs(:module_parent).returns(ActionCable::Connection::Subscriptions)
+      Connection.any_instance.stubs(:handle_incoming).raises(routing_error, "Channel not found: MissingChannel")
+      open_socket
+      @logger.expects(:error).with(includes("Channel not found: MissingChannel"))
+      @socket.receive({ command: "subscribe" }.to_json)
+
+      assert_not ActionCable.server.pubsub.failed?
+    end
+
     test "an error in handle_open fails the test, naming the connection" do
       open_socket(cookie: "broken=1")
 

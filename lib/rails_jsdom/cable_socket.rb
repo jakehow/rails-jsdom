@@ -30,6 +30,14 @@ module RailsJsdom
 
       def dispatch(text)
         @connection.handle_incoming(ActiveSupport::JSON.decode(text)) if open?
+      rescue StandardError => error
+        raise unless routing_error?(error)
+
+        logger.error "Could not handle incoming message: #{text} [#{error.class} - #{error.message}]"
+      end
+
+      def routing_error?(error)
+        error.class.module_parent == ActionCable::Connection::Subscriptions
       end
 
       def disconnect
