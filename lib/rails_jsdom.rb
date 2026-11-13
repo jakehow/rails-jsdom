@@ -23,6 +23,10 @@ module RailsJsdom
   CABLE_QUIET_PERIOD = 0.05
   CABLE_REPLY_TIMEOUT = 2
   COMMAND_TIMEOUT = 30
+  OPTION_ADVICE = {
+    wait: "rails-jsdom settles the page before every finder and assertion",
+    make_visible: "rails-jsdom attaches files to hidden fields too"
+  }.freeze
 
   class << self
     attr_writer :cable_quiet_period, :cable_reply_timeout, :command_timeout
@@ -74,6 +78,16 @@ module RailsJsdom
 
     def directories
       Rails.application.importmap.directories.values.to_h { |directory| [ directory.under, Rails.root.join(directory.dir).to_s ] }
+    end
+
+    def reject_options(keywords) # :nodoc:
+      advised = keywords.find { |keyword| OPTION_ADVICE.key?(keyword) }
+      raise ArgumentError, "#{advised}: does nothing here, because #{OPTION_ADVICE.fetch(advised)}. Remove it." if advised
+      raise ArgumentError, unknown_keywords(keywords) if keywords.any?
+    end
+
+    def unknown_keywords(keywords) # :nodoc:
+      "unknown keyword#{"s" if keywords.many?}: #{keywords.map(&:inspect).join(", ")}"
     end
 
     def keys(keys)

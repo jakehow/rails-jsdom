@@ -293,3 +293,18 @@ test("an unknown element action fails", async () => {
 
   await assert.rejects(element(await handleOf("p"), "squeeze"), /unknown element action squeeze/)
 })
+
+test("click without a locator clicks the only element of its kind in the scope, or the first with match first", async () => {
+  await runner.load(`<form id="f"><input name="q"><button onclick="hits.push('save'); return false">Save</button></form><p><a href="#a" onclick="hits.push('a')">A</a><a href="#b" onclick="hits.push('b')">B</a></p><script>window.hits = []</script>`)
+  await act("click", null, { kind: "button", scope: [{ css: "#f" }] })
+  await act("click", null, { kind: "link", match: "first" })
+
+  assert.deepEqual(await read("hits"), ["save", "a"])
+})
+
+test("click without a locator fails when nothing, or more than one element, of its kind is in the scope", async () => {
+  await runner.load(`<p><a href="#a">A</a><a href="#b">B</a></p><div id="empty"></div>`)
+
+  await assert.rejects(act("click", null, { kind: "link" }), /any element of that kind matches 2 elements/)
+  await assert.rejects(act("click", null, { kind: null, scope: [{ css: "#empty" }] }), /unable to find any element of that kind/)
+})

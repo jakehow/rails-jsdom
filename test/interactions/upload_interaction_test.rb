@@ -12,6 +12,21 @@ class UploadInteractionTest < RailsJsdom::TestCase
     assert_selector "#caption", text: "Holiday"
   end
 
+  test "click_button without a locator clicks the only button within a scope" do
+    visit new_upload_path
+    attach_file "Plain document", "#{FILES}/hello.txt"
+    within("form[data-turbo=false]") { click_button }
+
+    assert_selector "#uploaded li", text: "hello.txt"
+  end
+
+  test "attach_file says to remove make_visible, which rails-jsdom does not need" do
+    visit new_upload_path
+    error = assert_raises(ArgumentError) { attach_file "Document", "#{FILES}/hello.txt", make_visible: true }
+
+    assert_equal "make_visible: does nothing here, because rails-jsdom attaches files to hidden fields too. Remove it.", error.message
+  end
+
   test "attach_file keeps binary content intact" do
     visit new_upload_path
     attach_file "Document", "#{FILES}/bytes.bin"

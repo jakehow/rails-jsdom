@@ -150,7 +150,7 @@ module RailsJsdom
     # Clicks the link or button found by `locator`.
     #
     #   click_on "Add to cart"
-    def click_on(locator, match: nil)
+    def click_on(locator = nil, match: nil)
       rails_jsdom_act("click", locator, match, kind: "link_or_button")
     end
     alias_method :click_link_or_button, :click_on
@@ -158,14 +158,14 @@ module RailsJsdom
     # Clicks the link found by `locator`.
     #
     #   click_link "Second page"
-    def click_link(locator, match: nil)
+    def click_link(locator = nil, match: nil)
       rails_jsdom_act("click", locator, match, kind: "link")
     end
 
     # Clicks the button found by `locator`.
     #
     #   click_button "Save"
-    def click_button(locator, match: nil)
+    def click_button(locator = nil, match: nil)
       rails_jsdom_act("click", locator, match, kind: "button")
     end
 
@@ -246,7 +246,8 @@ module RailsJsdom
     # the page. Raises RailsJsdom::Error if the block opened no file chooser.
     #
     #   attach_file(file_fixture("avatar.png")) { click_on "Upload" }
-    def attach_file(locator, paths = nil, match: nil)
+    def attach_file(locator, paths = nil, match: nil, **options)
+      RailsJsdom.reject_options(options.keys)
       if block_given?
         RailsJsdom.bridge.call(command: "expect_file_chooser", files: rails_jsdom_files(locator))
         yield

@@ -13,7 +13,7 @@ module RailsJsdom
     end
 
     def initialize(strategy, locator, text: nil, exact_text: nil, visible: true, with: nil, checked: nil, unchecked: nil, disabled: nil, href: nil, type: nil, **unknown)
-      reject_unknown(unknown.keys)
+      RailsJsdom.reject_options(unknown.keys)
       @strategy = strategy
       @locator = locator
       @visible = visible
@@ -34,11 +34,6 @@ module RailsJsdom
     end
 
     private
-
-    def reject_unknown(keywords)
-      raise ArgumentError, "wait: does nothing here, because rails-jsdom settles the page before every finder and assertion. Remove it." if keywords.include?(:wait)
-      raise ArgumentError, "unknown keyword#{"s" if keywords.many?}: #{keywords.map(&:inspect).join(", ")}" if keywords.any?
-    end
 
     def visible?(descriptor)
       case @visible
