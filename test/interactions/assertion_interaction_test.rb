@@ -90,6 +90,18 @@ class AssertionInteractionTest < RailsJsdom::TestCase
     assert_raises(Minitest::Assertion) { assert_checked_field "Remember me" }
   end
 
+  test "the wait option of system tests fails and says to remove it" do
+    error = assert_raises(ArgumentError) { assert_selector "h1", wait: 5 }
+
+    assert_equal "wait: does nothing here, because rails-jsdom settles the page before every finder and assertion. Remove it.", error.message
+  end
+
+  test "finders and assertions still reject options they do not know" do
+    errors = [ { colour: "red" }, { wiat: 5, colour: "red" } ].map { |options| assert_raises(ArgumentError) { assert_selector "h1", **options }.message }
+
+    assert_equal [ "unknown keyword: :colour", "unknown keywords: :wiat, :colour" ], errors
+  end
+
   test "assert_button matches enabled buttons, and disabled ones on request" do
     assert_button "Save preferences"
     assert_no_button "Archive"

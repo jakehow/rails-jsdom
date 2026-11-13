@@ -222,7 +222,7 @@ The full API reference is at **[jakehow.github.io/rails-jsdom](https://jakehow.g
 | `within_window`, `switch_to_window` | ❌ | Not planned: check a `target="_blank"` link with `assert_link`, then `visit` it |
 | `drag_to` | ❌ | Never: drag-and-drop needs layout, which jsdom does not have |
 | `take_screenshot` | ❌ | Never: jsdom does not render pages |
-| Waiting (`default_max_wait_time`, retrying assertions) | — | Not needed: the page settles before every action and assertion |
+| Waiting (`default_max_wait_time`, retrying assertions) | — | Not needed: the page settles before every action and assertion. A `wait:` option raises an error that says to remove it |
 
 ### Only in rails-jsdom
 
