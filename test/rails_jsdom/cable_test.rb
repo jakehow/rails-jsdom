@@ -171,7 +171,7 @@ module RailsJsdom
     end
 
     def receive
-      @cable.answer({ "action" => "receive" }, nil)
+      @cable.answer({ "action" => "receive" }, nil).reject { |frame| frame[:data]&.include?('"type":"ping"') }
     end
 
     def types(frames)

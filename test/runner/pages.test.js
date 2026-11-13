@@ -267,13 +267,11 @@ test("jsdom still lacks the browser APIs the runtime adds", () => {
     MessageChannel: window.MessageChannel,
     DataTransfer: window.DataTransfer, ClipboardEvent: window.ClipboardEvent,
     rangeBoundingClientRect: window.Range.prototype.getBoundingClientRect, rangeClientRects: window.Range.prototype.getClientRects,
-    show: dialog.show,
-    showModal: dialog.showModal,
-    close: dialog.close,
+    show: dialog.show, showModal: dialog.showModal, close: dialog.close,
     setFormValue: window.ElementInternals.prototype.setFormValue,
+    requestFullscreen: window.Element.prototype.requestFullscreen, exitFullscreen: window.document.exitFullscreen,
     isContentEditable: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "isContentEditable"),
-    Request: window.Request,
-    Response: window.Response
+    Request: window.Request, Response: window.Response
   }
 
   assert.deepEqual(Object.keys(missing).filter(name => missing[name] !== undefined), [])
@@ -659,4 +657,18 @@ test("the page reports no touch support, as a desktop browser does", async () =>
   await runner.load(`<p id="p">Page</p>`)
 
   assert.deepEqual(await runner.evaluate(`["ontouchstart" in window, "ontouchend" in document, "ontouchmove" in p, navigator.maxTouchPoints]`), [false, false, false, 0])
+})
+
+test("an element can enter and leave fullscreen, as on a desktop browser", async () => {
+  await runner.load(`<div id="d"></div><script>window.changes = []; document.addEventListener("fullscreenchange", () => changes.push(document.fullscreenElement && document.fullscreenElement.id))</script>`)
+  const result = await runner.evaluate(`(async () => {
+    const enabled = document.fullscreenEnabled
+    await d.requestFullscreen()
+    const inside = document.fullscreenElement.id
+    await document.exitFullscreen()
+    await document.exitFullscreen()
+    return [enabled, inside, document.fullscreenElement, changes]
+  })()`)
+
+  assert.deepEqual(result, [true, "d", null, ["d", null]])
 })
