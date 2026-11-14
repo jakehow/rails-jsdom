@@ -45,6 +45,8 @@
 - Turbo Frames load. They needed `CSS.escape` (#1), which jsdom 31 now provides.
 - The installer works when npm prints warnings with its version.
 - Backspace after a line break in a contenteditable deletes the typed text.
+- On Rails 8.1, a page's cable connection no longer builds an unused WebSocket driver, so no `websocket-driver` files load in the middle of a test (#4).
+- `send_keys` takes no real time, and settling counts only progress, so a slow machine no longer fails a test with "the page did not settle". An action that waits for something that never arrives now fails at `RailsJsdom.command_timeout` (#5).
 
 ## 0.1.0 (2026-11-12)
 
