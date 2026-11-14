@@ -18,6 +18,10 @@ const type = (keys, selector) => selector ? runner.evaluate(`document.querySelec
 const text = value => ({ text: value })
 const key = (name, modifiers) => modifiers ? { key: name, modifiers } : { key: name }
 
+async function waitFor(condition) {
+  while (!condition()) await new Promise(resolve => setTimeout(resolve, 1))
+}
+
 test("send_keys by handle focuses the element first", async () => {
   await runner.load(`<input id="a">`)
   const [field] = await runner.run({ command: "query", strategy: "css", locator: "#a", scope: [] })
@@ -269,6 +273,42 @@ test("tasks queued while a key is handled run before the next key, as between re
   await type([text("ab")], "#a")
 
   assert.deepEqual(await read("events"), ["a", "task a", "b", "task b"])
+})
+
+test("typing many keys on a page with nothing else to do settles, however long the keys take", async () => {
+  await runner.load(`<input id="a">`)
+  await type([text("x".repeat(400))], "#a")
+
+  assert.equal(await read("a.value.length"), 400)
+})
+
+test("the clock does not move between keys, so timers a key starts run after the last key", async () => {
+  await runner.load(`<input id="a"><script>window.events = []; a.addEventListener("keydown", event => { events.push(event.key); setTimeout(() => events.push("timer " + event.key), 10) })</script>`)
+  await type([text("abc")], "#a")
+
+  assert.deepEqual(await read("events"), ["a", "b", "c", "timer a", "timer b", "timer c"])
+})
+
+test("a request a key starts is answered before the next key", async () => {
+  await runner.load(`<input id="a"><script>window.events = []; a.addEventListener("keydown", event => { events.push(event.key); fetch("/suggest").then(response => response.text()).then(body => events.push(body + " " + event.key)) })</script>`, `${HOST}/`)
+  runner.routes[`GET ${HOST}/suggest`] = "hold"
+  const answer = { status: 200, headers: {}, body: "answer", url: `${HOST}/suggest`, redirected: false }
+  const typing = type([text("ab")], "#a")
+  await waitFor(() => runner.held.length === 1)
+  await new Promise(resolve => setTimeout(resolve, 20))
+  const heldWhileWaiting = runner.held.length
+  runner.reply(runner.held[0].id, answer)
+  await waitFor(() => runner.held.length === 2)
+  runner.reply(runner.held[1].id, answer)
+  await typing
+
+  assert.deepEqual([heldWhileWaiting, await read("events")], [1, ["a", "answer a", "b", "answer b"]])
+})
+
+test("a key whose tasks never stop fails to settle", async () => {
+  await runner.load(`<input id="a"><script>a.addEventListener("keydown", () => { (function loop() { setTimeout(loop, 0) })() })</script>`)
+
+  await assert.rejects(type([text("ab")], "#a"), /the page did not settle/)
 })
 
 test("keys sent to a focused contenteditable whose selection is elsewhere type at its end", async () => {
