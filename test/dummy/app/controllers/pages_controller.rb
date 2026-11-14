@@ -17,6 +17,10 @@ class PagesController < ApplicationController
   def framed
   end
 
+  def save_step
+    redirect_to framed_path(step: 3)
+  end
+
   def styled
   end
 
