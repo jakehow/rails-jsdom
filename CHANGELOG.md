@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 (2026-11-14)
+
+### Fixed
+
+- A redirect after a page fetch keeps the request's headers, except the ones that describe its body, as in a browser. A form in a Turbo Frame that redirects after saving is still a frame request, so Rails renders the frame layout (#7).
+
 ## 0.2.0 (2026-11-14)
 
 ### Breaking changes
