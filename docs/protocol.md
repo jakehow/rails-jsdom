@@ -60,7 +60,7 @@ Reads answer at once and do not change the page.
 
 | Command | Fields | Result |
 | --- | --- | --- |
-| `setup` | `root`, `controllers`, `modules`, `stubs`, `directories`, `horizon`, `hidden` | `{}` once the Stimulus bundle is built. Sent once, first. See [Setup](#setup). |
+| `setup` | `root`, `controllers`, `entry`, `esbuild`, `modules`, `stubs`, `directories`, `horizon`, `hidden` | `{}` once the Stimulus bundle is built. Sent once, first. See [Setup](#setup). |
 | `snapshot` | *scope* | `{ html, text, url, title }`: the HTML and visible text of the page or scope, and the page's URL and title |
 | `query` | `strategy` (`"css"`, `"field"`, `"button"` or `"link"`), `locator` (or `null` for every element of that kind), *scope* | An array of [element descriptions](#element-descriptions) |
 | `read` | `handle` | One element description |
@@ -105,7 +105,9 @@ An action fails if the page threw an error, rejected a promise, showed an unexpe
 | Field | Value |
 | --- | --- |
 | `root` | The app's root. Node loads `jsdom` and `esbuild` from the app's `node_modules`. |
-| `controllers` | The directory of Stimulus controllers. Each `*_controller.js` is bundled under its identifier (`admin/user_panel_controller.js` is `admin--user-panel`). |
+| `controllers` | The directory of Stimulus controllers. Each `*_controller.js` is bundled under its identifier (`admin/user_panel_controller.js` is `admin--user-panel`) and registered on `window.Stimulus` as it appears on a page. `null` when the app registers its own: nothing is bundled from the directory, and errors from every Stimulus application on the page fail the action. |
+| `entry` | The app's entry module, for an app that bundles its JavaScript, or `null`. It runs on every page in place of the importmap's `application` module, and a bare `import()` that no pin resolves is bundled from `node_modules` instead of failing when it runs. An `import()` of a URL still loads only when it runs. |
+| `esbuild` | A module of the app, or `null`. Its default export receives the esbuild build options and returns them, or a promise of them, before the bundle is built. |
 | `modules` | The importmap pins that resolve to local files, as `{ name: path }` |
 | `stubs` | The pin names that resolve to other hosts. They are bundled as empty modules. |
 | `directories` | The importmap `pin_all_from` directories, as `{ prefix: path }` |

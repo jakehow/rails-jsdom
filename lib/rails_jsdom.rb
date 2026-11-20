@@ -29,6 +29,12 @@ module RailsJsdom
 
   class << self
     attr_writer :command_timeout
+    attr_accessor :entry, :esbuild_config
+    attr_writer :register_controllers
+
+    def register_controllers?
+      @register_controllers != false
+    end
 
     # Seconds to wait for the page to answer a command. A page in an endless
     # loop never answers; after this long its Node process is stopped and the
@@ -45,7 +51,9 @@ module RailsJsdom
       {
         command: "setup",
         root: Rails.root.to_s,
-        controllers: Rails.root.join("app/javascript/controllers").to_s,
+        controllers: controllers,
+        entry: app_path(entry),
+        esbuild: app_path(esbuild_config),
         modules: modules,
         stubs: remote_modules,
         directories: directories,
@@ -63,7 +71,11 @@ module RailsJsdom
     end
 
     def directories
-      Rails.application.importmap.directories.values.to_h { |directory| [ directory.under, Rails.root.join(directory.dir).to_s ] }
+      importmap_directories.to_h { |directory| [ directory.under, Rails.root.join(directory.dir).to_s ] }
+    end
+
+    def controllers
+      Rails.root.join("app/javascript/controllers").to_s if register_controllers?
     end
 
     def reject_options(keywords) # :nodoc:
@@ -91,7 +103,17 @@ module RailsJsdom
     end
 
     def packages
-      Rails.application.importmap.packages.transform_values(&:path)
+      importmap = Rails.application.try(:importmap)
+      importmap ? importmap.packages.transform_values(&:path) : {}
+    end
+
+    def importmap_directories
+      importmap = Rails.application.try(:importmap)
+      importmap ? importmap.directories.values : []
+    end
+
+    def app_path(path)
+      Rails.root.join(path).to_s if path
     end
 
     def bridges

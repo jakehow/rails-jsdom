@@ -14,6 +14,8 @@ const SETUP = {
   command: "setup",
   root: APP,
   controllers: path.join(APP, "app/javascript/controllers"),
+  entry: null,
+  esbuild: null,
   modules: {
     "@hotwired/stimulus": path.join(APP, "vendor/stimulus.js"),
     "@hotwired/turbo-rails": path.join(APP, "vendor/turbo.js")

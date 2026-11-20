@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Apps that bundle their JavaScript (esbuild, Bun, Vite, webpack) instead of using importmap. `RailsJsdom.entry` names the app's entry module, which runs on every page in place of the importmap's `application` module; bare `import()` calls in it are bundled from `node_modules`.
+- `RailsJsdom.register_controllers = false` leaves Stimulus controller registration to the app's own JavaScript, so a controller its entry registers does not connect twice. Errors from every Stimulus application on the page still fail the action.
+- `RailsJsdom.esbuild_config` names a module of the app that receives the esbuild build options and returns them, for plugins, loaders and defines that bundler-specific syntax needs.
+- An app without importmap configured gets no pins instead of an error.
+
 ## 0.2.1 (2026-11-14)
 
 ### Fixed

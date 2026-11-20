@@ -1,6 +1,6 @@
 # rails-jsdom
 
-> Browserless interaction tests for Rails apps built with Stimulus, Turbo and importmap. Tests use the system test method names; pages run in jsdom and every request is answered by Rails in the test process.
+> Browserless interaction tests for Rails apps built with Stimulus, Turbo and importmap, or with a JavaScript bundler. Tests use the system test method names; pages run in jsdom and every request is answered by Rails in the test process.
 
 ## Docs
 
