@@ -15,7 +15,9 @@
 
 <%= turbo_stream_from "items" %>
 <ul id="items">
-  <li id="item_1">First item <%= button_to "Remove", item_path(1), method: :delete, form: { data: { turbo_confirm: "Remove the first item?" } } %></li>
+  <li id="item_1">First item <%= button_to "Remove", item_path(1), method: :delete, form: { data: { turbo_confirm: "Remove the first item?" } } %>
+    <%= form_with url: item_path(1) do %><%= button_tag "Delete now", formmethod: :delete %><% end %>
+  </li>
 </ul>
 
 <%= form_with url: items_path do |form| %>

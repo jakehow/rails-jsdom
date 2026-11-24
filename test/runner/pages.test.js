@@ -69,6 +69,19 @@ test("a dialog of another type than expected is unexpected", async () => {
   await assert.rejects(runner.evaluate("alert('Hi')"), /unexpected alert dialog/)
 })
 
+test("a dialog's returnValue starts empty and keeps the value it was closed with, as a string", async () => {
+  await runner.load(`<dialog id="d"></dialog>`)
+  const result = await runner.evaluate(`
+    const dialog = document.getElementById("d")
+    const before = dialog.returnValue
+    dialog.showModal()
+    dialog.close(7)
+    ;[before, dialog.returnValue]
+  `)
+
+  assert.deepEqual(result, ["", "7"])
+})
+
 test("dialog elements open and close, firing close only when they were open", async () => {
   await runner.load(`<dialog id="d"></dialog>`)
   const result = await runner.evaluate(`
@@ -150,6 +163,38 @@ test("browser APIs jsdom lacks are stubbed", async () => {
   })()`)
 
   assert.deepEqual(result, [false, "(min-width: 600px)", false, [], "", "function"])
+})
+
+test("formMethod reflects a submitter's formmethod, limited to the methods a form knows", async () => {
+  await runner.load(`<form method="post"><button id="none">A</button><button id="post" formmethod="POST">B</button><input type="submit" id="delete" formmethod="delete"></form>`)
+  const result = await runner.evaluate(`(() => { const read = () => ["none", "post", "delete"].map(id => document.getElementById(id).formMethod); const before = read(); document.getElementById("none").formMethod = "dialog"; return [before, read()] })()`)
+
+  assert.deepEqual(result, [["", "post", "get"], ["dialog", "post", "get"]])
+})
+
+test("an element adopted from a parsed document keeps its inline event handlers, as in browsers", async () => {
+  await runner.load(`<main></main>`)
+  const result = await runner.evaluate(`(() => {
+    const parsed = new DOMParser().parseFromString('<p><button onclick="window.hit = (window.hit || 0) + 1">Go</button></p>', "text/html")
+    document.querySelector("main").append(document.adoptNode(parsed.querySelector("p")), document.adoptNode(parsed.createTextNode("text")), document.adoptNode(parsed.createDocumentFragment()))
+    document.querySelector("button").click()
+    return window.hit
+  })()`)
+
+  assert.equal(result, 1)
+})
+
+test("contentEditable reflects the contenteditable attribute, and setting it to true makes an element editable", async () => {
+  await runner.load(`<div id="on" contenteditable></div><div id="off" contenteditable="false"></div><div id="plain" contenteditable="plaintext-only"></div><div id="none"></div><div id="odd" contenteditable="maybe"></div>`)
+  const result = await runner.evaluate(`(() => {
+    const read = () => ["on", "off", "plain", "none", "odd"].map(id => document.getElementById(id).contentEditable)
+    const before = read()
+    document.getElementById("none").contentEditable = true
+    document.getElementById("on").contentEditable = "inherit"
+    return [before, read(), document.getElementById("none").isContentEditable]
+  })()`)
+
+  assert.deepEqual(result, [["true", "false", "plaintext-only", "inherit", "inherit"], ["inherit", "false", "plaintext-only", "true", "inherit"], true])
 })
 
 test("checkVisibility is false for an element that assertions treat as hidden", async () => {
@@ -281,6 +326,8 @@ test("jsdom still lacks the browser APIs the runtime adds", () => {
     setFormValue: window.ElementInternals.prototype.setFormValue,
     requestFullscreen: window.Element.prototype.requestFullscreen, exitFullscreen: window.document.exitFullscreen,
     isContentEditable: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "isContentEditable"),
+    contentEditable: Object.getOwnPropertyDescriptor(window.HTMLElement.prototype, "contentEditable"),
+    formMethod: Object.getOwnPropertyDescriptor(window.HTMLButtonElement.prototype, "formMethod"),
     Request: window.Request, Response: window.Response
   }
 
@@ -342,7 +389,15 @@ test("fetch asks Rails with the method, headers and a URL relative to the page",
   const result = await runner.evaluate(`fetch("new", { method: "post", headers: { "X-Token": "t" }, body: "raw" }).then(async r => [r.status, r.headers.get("x-id"), await r.text(), r.url, r.redirected])`)
 
   assert.deepEqual(result, [201, "7", "made", `${HOST}/items/new`, true])
-  assert.deepEqual(runner.requests[0], { method: "POST", url: `${HOST}/items/new`, headers: { "x-token": "t" }, body: Buffer.from("raw").toString("base64") })
+  assert.deepEqual(runner.requests[0], { method: "POST", url: `${HOST}/items/new`, headers: { "x-token": "t", referer: `${HOST}/items/` }, body: Buffer.from("raw").toString("base64") })
+})
+
+test("a page request sends the page's URL without its fragment as Referer, unless it sets one or leaves the origin", async () => {
+  await runner.load("<p>Page</p>", `${HOST}/items/?page=2#top`)
+  runner.routes[`GET ${HOST}/a`] = { status: 200, headers: {}, body: "a", url: `${HOST}/a`, redirected: false }
+  await runner.evaluate(`fetch("/a").then(() => fetch("/a", { headers: { Referer: "${HOST}/elsewhere" } })).then(() => fetch("https://other.test/b").catch(() => null))`)
+
+  assert.deepEqual(runner.requests.map(request => request.headers.referer), [`${HOST}/items/?page=2`, `${HOST}/elsewhere`, undefined])
 })
 
 test("fetch takes a Request and defaults to GET", async () => {
@@ -430,6 +485,27 @@ test("links that stay on the page, open elsewhere, download or are prevented do 
   await runner.evaluate(`for (const id of ["hash", "blank", "download", "mail", "prevented", "plain"]) document.getElementById(id).click(); document.dispatchEvent(new MouseEvent("click", { bubbles: true }))`)
 
   assert.equal(runner.requests.length, 0)
+})
+
+test("assigning, replacing and reloading location load the page Rails answers with", async () => {
+  await runner.load(`<p>Start</p>`, `${HOST}/start`)
+  runner.routes[`GET ${HOST}/next`] = html(`${HOST}/next`, "<p>Next page</p>", "Next")
+  runner.routes[`GET ${HOST}/other`] = html(`${HOST}/other`, "<p>Other page</p>", "Other")
+  await runner.evaluate(`window.location.href = "/next"`)
+  const assigned = (await runner.snapshot()).text
+  await runner.evaluate(`window.location.replace("/other")`)
+  const replaced = (await runner.snapshot()).text
+  await runner.evaluate(`window.location.reload()`)
+
+  assert.deepEqual([assigned, replaced, (await runner.snapshot()).url], ["Next page", "Other page", `${HOST}/other`])
+  assert.deepEqual(runner.requests.map(request => request.url), [`${HOST}/next`, `${HOST}/other`, `${HOST}/other`])
+})
+
+test("assigning a fragment or a non-http location stays in the document", async () => {
+  await runner.load(`<p id="top">Start</p>`, `${HOST}/start`)
+  await runner.evaluate(`window.location.hash = "top"; window.location.href = "javascript:void(0)"`)
+
+  assert.deepEqual([runner.requests.length, (await runner.snapshot()).url], [0, `${HOST}/start#top`])
 })
 
 test("a link to the same path with another query navigates", async () => {

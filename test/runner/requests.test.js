@@ -35,7 +35,7 @@ test("XMLHttpRequest asks Rails with the method, headers and body, and fires its
   })`)
 
   assert.deepEqual(result, [["readystatechange 1", "upload progress 3/3", "upload load", "readystatechange 4", "load"], 201, 7, "{\"id\":7}", `${HOST}/items/new`, "application/json", null, "content-type: application/json\r\n"])
-  assert.deepEqual(runner.requests[0], { method: "PUT", url: `${HOST}/items/new`, headers: { "x-token": "t" }, body: Buffer.from("raw").toString("base64") })
+  assert.deepEqual(runner.requests[0], { method: "PUT", url: `${HOST}/items/new`, headers: { "x-token": "t", referer: `${HOST}/items/` }, body: Buffer.from("raw").toString("base64") })
 })
 
 test("XMLHttpRequest reads text, and empty JSON as null", async () => {

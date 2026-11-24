@@ -44,5 +44,6 @@ module.exports = [
   },
   { files: ["lib/**/*.js", "eslint/**/*.js", "eslint.config.js", "test/runner/*.js", "test/eslint/*.js"], languageOptions: { sourceType: "commonjs", globals: node } },
   { files: ["test/dummy/app/javascript/**/*.js", "test/runner/fixtures/app/{app,vendor}/**/*.js"], languageOptions: { sourceType: "module", globals: browser } },
-  { files: ["test/runner/fixtures/app/node_modules/**/*.js"], languageOptions: { sourceType: "commonjs", globals: node } }
+  { files: ["test/runner/fixtures/app/node_modules/**/*.js", "test/runner/fixtures/bundled/node_modules/lazy-package/*.js"], languageOptions: { sourceType: "commonjs", globals: node } },
+  { files: ["test/runner/fixtures/bundled/app/**/*.js", "test/runner/fixtures/bundled/node_modules/@hotwired/**/*.js"], languageOptions: { sourceType: "module", globals: { ...browser, BUILT_BY: "readonly" } } }
 ]

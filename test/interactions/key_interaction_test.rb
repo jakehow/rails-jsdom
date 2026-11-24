@@ -27,6 +27,29 @@ class KeyInteractionTest < RailsJsdom::TestCase
     assert_current_path "/echo?only=plates"
   end
 
+  test "enter in a field skips a submit button that belongs to another form" do
+    find_field("Signup email").send_keys("ada@example.com", :enter)
+
+    assert_current_path "/echo?email=ada%40example.com&commit=signup"
+  end
+
+  test "escape closes the modal dialog the focus is in" do
+    click_on "Open sheet"
+
+    assert_text "Sheet body"
+
+    find_field("Sheet field").send_keys(:escape)
+
+    assert_no_text "Sheet body"
+  end
+
+  test "a modal dialog closed with escape has an empty return value" do
+    click_on "Open sheet"
+    find_field("Sheet field").send_keys(:escape)
+
+    assert_equal "", evaluate_script("document.getElementById('sheet').returnValue")
+  end
+
   test "enter in a textarea adds a new line" do
     find_field("Notes").send_keys("one", :enter, "two")
 

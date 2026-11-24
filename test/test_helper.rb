@@ -13,3 +13,5 @@ require_relative "dummy/config/environment"
 require "rails/test_help"
 require "mocha/minitest"
 require "rails_jsdom"
+
+RailsJsdom.hidden_selectors = [ ".is-hidden" ]

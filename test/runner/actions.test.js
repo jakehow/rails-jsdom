@@ -81,6 +81,60 @@ test("match first picks the first of several matches", async () => {
   assert.equal(await read("hit"), 1)
 })
 
+test("an action prefers the one visible, enabled match over hidden or disabled ones", async () => {
+  await runner.load(`<input name="query" disabled><input name="query" id="live"><button hidden onclick="window.hit = 1">Go</button><button onclick="window.hit = 2">Go</button>`)
+  await act("fill_in", "query", { with: "Beta" })
+  await act("click", "Go")
+
+  assert.deepEqual(await runner.evaluate(`[document.getElementById("live").value, window.hit]`), ["Beta", 2])
+})
+
+test("an action fails when every match is hidden, except on a file field", async () => {
+  await runner.load(`<div hidden><button>Gone</button><input name="note"></div><input type="file" name="upload" hidden>`)
+
+  await assert.rejects(act("click", "Gone"), /unable to find "Gone": every match is hidden/)
+  await assert.rejects(act("fill_in", "note", { with: "x" }), /unable to find "note": every match is hidden/)
+  assert.equal(await act("attach", "upload", { files: [] }), null)
+})
+
+test("fill_in counts a field once when two labels name it", async () => {
+  await runner.load(`<label for="vendor">Search for Vendor</label><label for="vendor" hidden>Search for Vendor</label><input id="vendor">`)
+  await act("fill_in", "Search for Vendor", { with: "Space X" })
+
+  assert.equal(await runner.evaluate(`document.getElementById("vendor").value`), "Space X")
+})
+
+test("within picks the one visible match over hidden ones, and still scopes to a hidden element alone", async () => {
+  await runner.load(`<ul class="results" hidden><li><button>Pick</button></li></ul><ul class="results"><li><button onclick="window.hit = true">Pick</button></li></ul><div id="closed" hidden><p>Gone</p></div>`)
+  await act("click", "Pick", { scope: [{ css: ".results" }] })
+
+  assert.equal(await read("hit"), true)
+  assert.equal((await query("css", "p", [{ css: "#closed" }])).length, 1)
+})
+
+test("a label's for names every field with that id, skipping a hidden input that shares it", async () => {
+  await runner.load(`<label for="cost">Cost</label><input type="hidden" id="cost" name="mirror"><input id="cost" name="cost"><label>Nested <input name="nested"></label>`)
+  await act("fill_in", "Cost", { with: "100" })
+  await act("fill_in", "Nested", { with: "inside" })
+
+  assert.deepEqual(await runner.evaluate(`[document.querySelector("[name=cost]").value, document.querySelector("[name=mirror]").value, document.querySelector("[name=nested]").value]`), ["100", "", "inside"])
+})
+
+test("fill_in and typing set a value past a value setter the page installs on the field, as React does to track changes", async () => {
+  await runner.load(`<input id="r"><textarea id="t"></textarea>`)
+  await runner.evaluate(`for (const field of [document.getElementById("r"), document.getElementById("t")]) {
+    const native = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")
+    let tracked = ""
+    Object.defineProperty(field, "value", { configurable: true, get() { return native.get.call(this) }, set(value) { tracked = value; native.set.call(this, value) } })
+    field.addEventListener("input", () => { field.dataset.changed = String(field.value !== tracked) })
+  }`)
+  await act("fill_in", "#r", { with: "15" })
+  await runner.evaluate(`document.getElementById("t").focus()`)
+  await runner.run({ command: "send_keys", keys: [{ text: "a" }] })
+
+  assert.deepEqual(await runner.evaluate(`[document.getElementById("r").dataset.changed, document.getElementById("t").dataset.changed]`), ["true", "true"])
+})
+
 test("click fails on a disabled element", async () => {
   await runner.load(`<button disabled>Off</button>`)
 
@@ -234,6 +288,13 @@ test("visible text leaves out hidden elements, templates, comments and closed de
   await runner.load(`<div>One<b>Two</b><!-- note --><span hidden>Hidden</span><template>T</template></div><div>Three</div><details><summary>More</summary><p>Inside</p></details><details open><summary>Open</summary><p>Shown</p></details>`)
 
   assert.equal((await runner.snapshot()).text, "OneTwo Three More Open Shown")
+})
+
+test("visible text includes elements a script appends to the root element after the body, but not the head", async () => {
+  await runner.load(`<p>Body text</p>`)
+  await runner.evaluate(`const frame = document.createElement("section"); frame.textContent = "Appended after body"; document.documentElement.append(frame)`)
+
+  assert.equal((await runner.snapshot()).text, "Body text Appended after body")
 })
 
 test("visibility follows hidden ancestors and closed details", async () => {

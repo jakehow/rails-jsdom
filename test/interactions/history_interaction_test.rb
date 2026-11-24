@@ -82,4 +82,15 @@ class HistoryInteractionTest < RailsJsdom::TestCase
   test "go_back needs a page" do
     assert_raises(RailsJsdom::Error) { go_back }
   end
+
+  test "a script that assigns location loads the page and adds a history entry" do
+    visit keys_path
+    click_on "Go by script"
+
+    assert_current_path second_path
+
+    go_back
+
+    assert_current_path keys_path
+  end
 end

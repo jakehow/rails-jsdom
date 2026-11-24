@@ -112,7 +112,8 @@ module RailsJsdom
 
     def open(url, protocols, cookie)
       @protocol = (protocols & ActionCable::INTERNAL[:protocols]).first.to_s
-      status, = Rails.application.call(self.class.env(url, protocols, cookie).merge(ENV_KEY => self))
+      status, _headers, body = Rails.application.call(self.class.env(url, protocols, cookie).merge(ENV_KEY => self))
+      body.close
       status == -1 ? { protocol: @protocol } : { error: "the cable endpoint answered #{status}" }
     end
 

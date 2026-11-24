@@ -43,6 +43,71 @@ class SystemTestMethodsInteractionTest < RailsJsdom::TestCase
     assert_raises(RailsJsdom::Error) { fill_in "Remember me", with: "yes" }
   end
 
+  test "fill_in and click_on act on the one visible, enabled match when others are disabled or hidden" do
+    visit forms_path
+    fill_in "query", with: "Beta"
+    click_on "Save preferences"
+
+    assert_equal "Beta", submitted.fetch("query")
+  end
+
+  test "fill_in finds a field once when two labels name it" do
+    visit forms_path
+    fill_in "Nickname", with: "Grace"
+    click_on "Save preferences"
+
+    assert_equal "Grace", submitted.fetch("nickname")
+  end
+
+  test "within scopes to the one visible match when hidden ones share its selector" do
+    visit forms_path
+    within(".suggestions") { click_on "Suggested" }
+
+    assert_button "Picked"
+  end
+
+  test "click_on fails when the only match is hidden" do
+    visit forms_path
+
+    error = assert_raises(RailsJsdom::Error) { click_on "Discard draft" }
+    assert_match(/unable to find "Discard draft": every match is hidden/, error.message)
+  end
+
+  test "a form submitted from a page tells Rails which page it came from" do
+    visit forms_path
+    click_on "Save preferences"
+
+    assert_selector "#referer", text: "http://www.example.com/forms"
+  end
+
+  test "an inline change handler on a page Turbo rendered still runs" do
+    visit forms_path
+    click_on "Save preferences"
+    select "Newest", from: "Sort"
+
+    assert_current_path "/echo?sort=Newest"
+  end
+
+  test "fill_in finds the field a label names even when a hidden input shares its id" do
+    visit forms_path
+    fill_in "Budget", with: "250"
+    click_on "Save preferences"
+
+    assert_equal [ "250", "0" ], submitted.values_at("budget", "budget_mirror")
+  end
+
+  test "header sends a header with visits and with the requests pages make" do
+    header "User-Agent", "Phone"
+    visit echo_path
+
+    assert_selector "#user-agent", text: "Phone"
+
+    visit forms_path
+    click_on "Save preferences"
+
+    assert_selector "#user-agent", text: "Phone"
+  end
+
   test "click_link finds only links" do
     visit forms_path
 

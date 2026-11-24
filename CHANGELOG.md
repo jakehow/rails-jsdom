@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Apps that bundle their JavaScript (esbuild, Bun, Vite, webpack) instead of using importmap. `RailsJsdom.entry` names the app's entry module, which runs on every page in place of the importmap's `application` module; bare `import()` calls in it are bundled from `node_modules`.
+- `RailsJsdom.register_controllers = false` leaves Stimulus controller registration to the app's own JavaScript, so a controller its entry registers does not connect twice. Errors from every Stimulus application on the page still fail the action.
+- `RailsJsdom.esbuild_config` names a module of the app that receives the esbuild build options and returns them, for plugins, loaders and defines that bundler-specific syntax needs.
+- An app without importmap configured gets no pins instead of an error.
+- `RailsJsdom.hidden_selectors` names selectors the app's stylesheets always hide, such as a `.hide` utility class. Assertions, finders and visible text treat matching elements, and their descendants, as hidden.
+- `header(name, value)` sends a header, such as a phone's `User-Agent`, with every request Rails receives from the test from then on, including the requests its pages make. A request that sets the header itself keeps its own value.
+
+### Changed
+
+- An action whose locator matches several elements acts on the one that is visible and enabled, as Capybara does, instead of failing as ambiguous. A disabled search box beside the live one, or a hidden copy of a button, no longer gets in the way. When no match is visible and enabled, the action behaves as before: a hidden file field is still attached to, and a disabled button still fails with "is disabled".
+- An action whose every match is hidden fails with "unable to find … every match is hidden", as a click on something the user cannot see fails in a browser. A hidden file field is the exception: `attach_file` still attaches to it.
+- `within` scopes to the one visible match when hidden elements share its selector, as Capybara does, instead of failing as ambiguous. A selector that matches only hidden elements still scopes to the one it matches.
+
+### Fixed
+
+- Opening a cable connection closes the response body of the request it makes to the app, so the Rails executor completes. It was left running on the test's thread until the next request, so a test that followed without making one ran inside it: jobs a commit enqueued were held back, and `Current` kept the earlier test's values.
+- A `<dialog>`'s `returnValue` starts as `""` and holds the value it was closed with as a string, as in browsers. jsdom left it undefined, so code that checks for an empty return value to tell a dismissal from a choice saw a choice.
+- The page's visible text includes elements a script appends to the root element after `<body>`, which browsers render, such as a fragment Turbo appends when it renders a stream message. Only `<body>` was read before. `<head>` is still left out.
+- Escape cancels the topmost modal `<dialog>`, including one inside a shadow root such as a Web Awesome dialog's: it fires a cancelable `cancel` event and closes the dialog unless that event is prevented, as browsers do. jsdom has no close watcher, so Escape left modals open.
+- A script that navigates with `location.href =`, `location.assign`, `location.replace` or `location.reload` loads the page Rails answers with, as a link would. jsdom reported "Not implemented: navigation to another Document", which failed the action; Turbo uses `location.href` for the full reload it does when a visit's tracked assets change. Fragment and non-HTTP locations stay in the document.
+- `fill_in` and typed keys set a field's value through the browser's own `value` setter, so a page that installs its own setter on the field to track changes, as React does for controlled inputs, sees the change and runs its `onChange`. React ignored values set by `fill_in` before.
+- `contentEditable` reflects the `contenteditable` attribute (`"true"`, `"false"`, `"plaintext-only"` or `"inherit"`), and setting it makes an element editable or not. jsdom left it undefined, so libraries that check it before binding to an editor, such as Tribute on a Trix editor, threw.
+- A label's `for` names every field with that id, as in Capybara, so a field still matches its label when a hidden input earlier in the page shares the id, as Rails form builders sometimes render. jsdom's `label.control` resolved to the hidden input, which is not labelable, so the field was not found.
+- Inline event handler attributes such as `onchange` keep working on elements adopted from a parsed document, which is how Turbo renders the pages it visits. jsdom dropped them, so after the first Turbo visit an inline handler never ran.
+- Enter in a field submits through the first submit button its form owns. A button inside the form that belongs to another form through its `form` attribute is skipped, as browsers do, instead of being clicked.
+- Requests a page makes to its own origin (fetch, XMLHttpRequest, form submissions, Turbo visits) send the page's URL, without its fragment, as `Referer`, as browsers do. `redirect_back` and `request.referer` saw nothing before. A request that sets its own `Referer` keeps it.
+- A submit button's `formMethod` property reflects its `formmethod` attribute, as browsers do. jsdom left it undefined, so turbo-rails sent a `formmethod="delete"` button's form as the form's own method instead.
+- A field named by two labels, such as a visible label and a hidden copy for another layout, is one match for `fill_in` and the other field helpers instead of an ambiguous two.
+
 ## 0.2.1 (2026-11-14)
 
 ### Fixed

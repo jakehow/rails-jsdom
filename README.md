@@ -1,6 +1,6 @@
 # rails-jsdom
 
-Browserless interaction tests for Rails apps built with Stimulus, Turbo and importmap.
+Browserless interaction tests for Rails apps built with Stimulus, Turbo and importmap, or with a JavaScript bundler.
 
 `rails-jsdom` lets you write tests that read like system tests — `visit`, `click_on`, `fill_in`, `assert_selector`, `assert_text` — without Capybara, a test server or a browser. Your real pages render through Rails, your real Stimulus controllers and Turbo run in [jsdom](https://github.com/jsdom/jsdom), and every request the page makes is answered by Rails in the same test process. Tests run deterministically, fail on JavaScript errors, and in [37signals' open-source apps](#results-on-37signals-open-source-apps) ran 1.8x to 16.5x faster than the same tests as system tests.
 
@@ -27,6 +27,8 @@ end
 - [Trade-offs compared with system tests](#trade-offs-compared-with-system-tests)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Apps that bundle JavaScript (esbuild, Bun, Vite, webpack)](#apps-that-bundle-javascript-esbuild-bun-vite-webpack)
+- [Hiding by class](#hiding-by-class)
 - [Writing tests](#writing-tests)
 - [API](#api)
 - [Action Cable and Turbo Stream broadcasts](#action-cable-and-turbo-stream-broadcasts)
@@ -40,7 +42,7 @@ end
 ## How it works
 
 1. Each test worker starts one persistent Node process running jsdom.
-2. Node bundles your importmap's `application` module and your Stimulus controllers once with [esbuild](https://esbuild.github.io), from your app's own importmap, so the versions under test are the ones your app ships.
+2. Node bundles your importmap's `application` module and your Stimulus controllers once with [esbuild](https://esbuild.github.io), from your app's own importmap, so the versions under test are the ones your app ships. An app that bundles its JavaScript names its [entry module](#apps-that-bundle-javascript-esbuild-bun-vite-webpack) instead.
 3. `visit` makes a real Rails request and loads the response into a jsdom window. Your `application` module runs, Turbo and Stimulus boot, and controllers connect in the same order as with `stimulus-loading` in a browser.
 4. Every `fetch` and `XMLHttpRequest` the page makes, including Turbo visits, form submissions, frames and direct uploads, is answered by Rails in the same process, with the test's session.
 5. After every action, the page **settles**: timers run on a virtual clock, Action Cable messages are delivered, and pending requests finish. Assertions then read the live DOM, so there is nothing to wait for.
@@ -89,8 +91,8 @@ jsdom runs the DOM and JavaScript but does not lay out or paint pages. Keep a fe
 ## Requirements
 
 - Ruby 3.3, 3.4 or 4.0
-- Rails 8.1 with `importmap-rails`, `propshaft`, `turbo-rails` and `stimulus-rails`
-- Stimulus controllers under `app/javascript/controllers`, named `*_controller.js`
+- Rails 8.1 with `turbo-rails` and `stimulus-rails`, and either `importmap-rails` and `propshaft` or a JavaScript bundler (see [Apps that bundle JavaScript](#apps-that-bundle-javascript-esbuild-bun-vite-webpack))
+- With importmap, Stimulus controllers under `app/javascript/controllers`, named `*_controller.js`
 - Node.js 22.22.2+, 24.15+ or 26+, the supported LTS lines that jsdom 31 runs on
 
 CI also runs the suite against edge Rails.
@@ -115,6 +117,71 @@ It also protects you from compromised npm releases:
 - `package.json` allows newer minor and patch releases of jsdom and esbuild, never a new major version.
 - `.npmrc` gets `min-release-age=7`, so npm skips versions published in the last 7 days. This needs npm 11.10 or later, and the generator warns if yours is older.
 - Commit `package-lock.json` and use `npm ci` in CI, so new versions only arrive when someone updates and commits them.
+
+## Apps that bundle JavaScript (esbuild, Bun, Vite, webpack)
+
+An app that bundles its JavaScript instead of using importmap tells rails-jsdom where its entry module is, in `test/test_helper.rb` after `require "rails_jsdom"`:
+
+```ruby
+RailsJsdom.entry = "app/javascript/application.js"
+RailsJsdom.register_controllers = false
+RailsJsdom.esbuild_config = "test/rails_jsdom.esbuild.mjs"
+```
+
+- **`RailsJsdom.entry`** is the module your bundler starts from, relative to the app's root. It runs on every page, as the importmap's `application` module would. Bare imports, including `import()` of a package, are bundled from `node_modules`. An `import()` of a URL is left to load when it runs, and fails, since pages have no network.
+- **`RailsJsdom.register_controllers = false`** leaves controller registration to your entry, which usually registers them itself (a `controllers/index.js` manifest, `import.meta.glob` or `require.context`). Without it, rails-jsdom also registers each `app/javascript/controllers/*_controller.js` on `window.Stimulus`, and a controller would connect twice. Errors from every Stimulus application on the page still fail the action that caused them, unless your app gives its application its own `handleError`.
+- **`RailsJsdom.esbuild_config`** is optional: a module whose default export receives the esbuild build options and returns them, or a promise of them. rails-jsdom bundles with esbuild whichever bundler the app uses, so syntax that only your bundler understands needs an esbuild plugin, loader or define here. `options.plugins` holds rails-jsdom's own plugin; put yours first to resolve a specifier before it does.
+
+For a Vite app, this config expands eager `import.meta.glob` calls, loads `?raw` imports as text, and compiles JSX in `.js` files:
+
+```js
+import fs from "node:fs"
+import path from "node:path"
+
+const GLOB = /import\.meta\.glob\(\s*(["'])(.+?)\1\s*,\s*\{\s*eager:\s*true\s*\}\s*\)/g
+
+function expandGlobs(file, source) {
+  const imports = []
+  const code = source.replace(GLOB, (_call, _quote, pattern) => {
+    const matches = fs.globSync(pattern, { cwd: path.dirname(file) }).sort().map(match => `./${match}`)
+    const entries = matches.map(match => {
+      imports.push(`import * as glob${imports.length} from ${JSON.stringify(match)}`)
+      return `${JSON.stringify(match)}: glob${imports.length - 1}`
+    })
+    return `{ ${entries.join(", ")} }`
+  })
+  return `${imports.join("\n")}\n${code}`
+}
+
+const vite = {
+  name: "vite",
+  setup(build) {
+    build.onLoad({ filter: /app\/javascript\/.*\.jsx?$/ }, args => {
+      const source = fs.readFileSync(args.path, "utf8")
+      return { contents: expandGlobs(args.path, source), loader: "jsx" }
+    })
+    build.onResolve({ filter: /\?raw$/ }, args => ({ path: path.resolve(args.resolveDir, args.path.slice(0, -4)), namespace: "raw" }))
+    build.onLoad({ filter: /.*/, namespace: "raw" }, args => ({ contents: fs.readFileSync(args.path, "utf8"), loader: "text" }))
+  }
+}
+
+export default options => ({
+  ...options,
+  jsx: "automatic",
+  define: { "process.env.NODE_ENV": "\"production\"" },
+  plugins: [vite, ...options.plugins]
+})
+```
+
+## Hiding by class
+
+Assertions and finders skip what the page hides with the `hidden` attribute, an inline `display: none`, a closed `<dialog>` or `<details>`, and elements such as `<template>`. rails-jsdom does not apply stylesheets, so an element that the app's CSS hides, such as one with a `.hide` utility class, counts as visible. Name those selectors in `test/test_helper.rb` after `require "rails_jsdom"`:
+
+```ruby
+RailsJsdom.hidden_selectors = [ ".hide", "wa-dialog:not([open])" ]
+```
+
+An element matching one of them is hidden, with everything inside it. Only list selectors that always hide what they match.
 
 ## Writing tests
 
@@ -201,6 +268,7 @@ The full API reference is at **[jakehow.github.io/rails-jsdom](https://jakehow.g
 | [`stub_fetch`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-stub_fetch) | Answers a page request without Rails |
 | [`stub_layout`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-stub_layout) | Gives elements matching a selector, and ranges inside them, a box instead of 0x0, for a test whose page waits for a real measurement |
 | [`page_text`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-page_text) | The visible text of the page or the current `within` scope |
+| [`header`](https://jakehow.github.io/rails-jsdom/RailsJsdom/TestHelper.html#method-i-header) | Sends a header, such as a phone's `User-Agent`, with every request Rails receives from then on: visits and the requests pages make. A request that sets the header itself keeps its own value. Like rack_test's `page.driver.header` |
 
 `assert_dom`, `assert_select` and `css_select` work as in any Rails test and read the live page.
 
@@ -253,7 +321,7 @@ CI needs Node and your app's npm packages before the tests run:
 
 See [what you lose](#trade-offs-compared-with-system-tests). In addition:
 
-- jsdom lacks some browser APIs, so the runtime stubs the common ones to keep controllers working: `matchMedia` never matches, `IntersectionObserver` and `ResizeObserver` never report, scrolling does nothing, stylesheets and images fire `load` without being fetched, and the clipboard, Fullscreen API, `DataTransfer` and form-associated custom elements are provided. The page behaves as a desktop browser without touch. A page that needs another missing API needs a small stub in your controller or test.
+- jsdom lacks some browser APIs, so the runtime stubs the common ones to keep controllers working: `matchMedia` never matches, `IntersectionObserver` and `ResizeObserver` never report, scrolling does nothing, stylesheets and images fire `load` without being fetched, and the clipboard, Fullscreen API, `DataTransfer`, a submit button's `formMethod`, `contentEditable` and form-associated custom elements are provided. The page behaves as a desktop browser without touch. A page that needs another missing API needs a small stub in your controller or test.
 - On a page loaded with `mount_html`, a link or form that leads to a full app page fails. Start such tests from a real page with `visit`.
 - Stimulus outlets are not tested yet.
 

@@ -22,6 +22,12 @@ module RailsJsdom
       assert_equal({ protocol: "actioncable-v1-json" }, open_socket)
     end
 
+    test "opening a connection finishes the request it made to the app" do
+      open_socket
+
+      assert_not Rails.application.executor.active?
+    end
+
     test "a page that offers no Action Cable protocol gets none" do
       assert_equal({ protocol: "" }, open_socket(protocols: [ "chat" ]))
     end

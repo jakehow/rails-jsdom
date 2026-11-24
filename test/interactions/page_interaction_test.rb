@@ -131,6 +131,13 @@ class PageInteractionTest < RailsJsdom::TestCase
     assert_dom "#item_1", count: 0
   end
 
+  test "a submit button's formmethod sets the method Rails receives" do
+    visit root_path
+    click_on "Delete now"
+
+    assert_dom "#item_1", count: 0
+  end
+
   test "dismissing a Turbo confirmation keeps the page unchanged" do
     visit root_path
     dismiss_confirm { click "Remove" }
@@ -254,5 +261,12 @@ class PageInteractionTest < RailsJsdom::TestCase
     click "Load greeting"
 
     assert_dom "[data-greeting-target=output]", text: "Please sign in"
+  end
+
+  test "text a script appends after the body is part of the page text, as browsers render it" do
+    visit forms_path
+    execute_script "const note = document.createElement('p'); note.textContent = 'Appended after body'; document.documentElement.append(note)"
+
+    assert_text "Appended after body"
   end
 end

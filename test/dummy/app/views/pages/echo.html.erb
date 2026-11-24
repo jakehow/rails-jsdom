@@ -1,2 +1,8 @@
 <% content_for :title, "Echo" %>
 <pre id="params"><%= request.query_parameters.to_json %></pre>
+<p id="referer"><%= request.referer %></p>
+<p id="user-agent"><%= request.user_agent %></p>
+<form action="/echo" method="get">
+  <label for="sort">Sort</label>
+  <select id="sort" name="sort" onchange="this.form.requestSubmit()"><option>Oldest</option><option>Newest</option></select>
+</form>

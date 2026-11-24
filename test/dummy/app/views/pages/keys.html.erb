@@ -1,5 +1,8 @@
 <% content_for :title, "Keys" %>
 <h1>Keys</h1>
+<button type="button" onclick="window.location.assign('/second')">Go by script</button>
+<button type="button" onclick="document.getElementById('sheet').showModal()">Open sheet</button>
+<dialog id="sheet"><p>Sheet body</p><input aria-label="Sheet field"></dialog>
 
 <form action="/echo" method="get">
   <label for="query">Query</label>
@@ -10,6 +13,14 @@
 <form action="/echo" method="get">
   <label for="only">Only field</label>
   <input id="only" name="only">
+</form>
+
+<form action="/echo" method="get" id="coupon_check"></form>
+<form action="/echo" method="get">
+  <label for="signup_email">Signup email</label>
+  <input id="signup_email" name="email">
+  <button form="coupon_check" name="coupon" value="check">Apply</button>
+  <button name="commit" value="signup">Sign up</button>
 </form>
 
 <label for="notes">Notes</label>

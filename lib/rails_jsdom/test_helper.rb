@@ -77,6 +77,10 @@ module RailsJsdom
       rails_jsdom_visit(path, "push")
     end
 
+    def header(name, value)
+      rails_jsdom_headers[name.to_s.downcase] = value
+    end
+
     # Requests the current URL again and loads it as a new page, without
     # adding a history entry.
     def refresh
@@ -827,7 +831,12 @@ module RailsJsdom
       { status: response.status, headers: response.headers.to_h.except("set-cookie"), body: response.body, url: request.original_url, redirected: redirected }
     end
 
+    def rails_jsdom_headers
+      @rails_jsdom_headers ||= {}
+    end
+
     def rails_jsdom_request(method, path, headers:, params: nil)
+      headers = rails_jsdom_headers.merge(headers.transform_keys(&:downcase))
       process(method.downcase.to_sym, path, params: params, headers: headers)
       rails_jsdom_follow_redirects(headers.except("content-type", "content-encoding", "content-language", "content-location"), false)
     end

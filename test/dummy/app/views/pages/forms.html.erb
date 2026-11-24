@@ -21,14 +21,24 @@
   <%= form.label :colours, "Colours" %>
   <%= form.select :colours, [ "Red", "Green", "Blue" ], { selected: [ "Red", "Green" ] }, multiple: true %>
   <%= form.label :nickname, "Nickname" %>
+  <%= form.label :nickname, "Nickname", hidden: true %>
   <%= form.text_field :nickname, value: "Ace" %>
   <%= form.label :locked, "Locked" %>
   <%= form.text_field :locked, value: "fixed", disabled: true %>
+  <%= form.label :budget, "Budget" %>
+  <%= form.hidden_field :budget, value: "0", name: "budget_mirror" %>
+  <%= form.text_field :budget %>
   <%= form.label :bio, "Bio" %>
   <%= form.text_area :bio %>
+  <%= form.text_field :query, disabled: true, placeholder: "Search orders" %>
+  <%= form.text_field :query, id: "source_query" %>
+  <section hidden><button type="button">Save preferences</button><button type="button">Discard draft</button></section>
   <%= form.submit "Save preferences" %>
   <%= form.button "Archive", type: "button", disabled: true %>
 <% end %>
+
+<ul class="suggestions" hidden><li>Old suggestion</li></ul>
+<ul class="suggestions"><li><button type="button" onclick="this.textContent = 'Picked'">Suggested</button></li></ul>
 
 <table id="prices">
   <caption>Prices</caption>

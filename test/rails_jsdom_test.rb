@@ -22,9 +22,42 @@ class RailsJsdomTest < ActiveSupport::TestCase
   end
 
   test ".setup points Node at the application and its Stimulus controllers" do
-    expected = { command: "setup", root: Rails.root.to_s, controllers: Rails.root.join("app/javascript/controllers").to_s, horizon: RailsJsdom::TIMER_HORIZON, hidden: RailsJsdom::HIDDEN_SELECTOR }
+    expected = { command: "setup", root: Rails.root.to_s, controllers: Rails.root.join("app/javascript/controllers").to_s, horizon: RailsJsdom::TIMER_HORIZON, hidden: "#{RailsJsdom::HIDDEN_SELECTOR}, .is-hidden" }
 
     assert_equal expected, RailsJsdom.setup.slice(*expected.keys)
+  end
+
+  test ".hidden_selectors is empty unless the app names some" do
+    RailsJsdom.hidden_selectors = nil
+
+    assert_equal [ [], RailsJsdom::HIDDEN_SELECTOR ], [ RailsJsdom.hidden_selectors, RailsJsdom.setup.fetch(:hidden) ]
+  ensure
+    RailsJsdom.hidden_selectors = [ ".is-hidden" ]
+  end
+
+  test ".setup leaves the entry and esbuild config to the importmap by default" do
+    assert_equal({ entry: nil, esbuild: nil }, RailsJsdom.setup.slice(:entry, :esbuild))
+  end
+
+  test ".setup points Node at the app's entry and esbuild config" do
+    RailsJsdom.stubs(:entry).returns("app/javascript/entry.js")
+    RailsJsdom.stubs(:esbuild_config).returns("test/esbuild.config.mjs")
+
+    assert_equal({ entry: Rails.root.join("app/javascript/entry.js").to_s, esbuild: Rails.root.join("test/esbuild.config.mjs").to_s }, RailsJsdom.setup.slice(:entry, :esbuild))
+  end
+
+  test ".setup sends no controllers when the app registers its own" do
+    RailsJsdom.register_controllers = false
+
+    assert_nil RailsJsdom.setup.fetch(:controllers)
+  ensure
+    RailsJsdom.register_controllers = true
+  end
+
+  test ".modules and .directories are empty without importmap" do
+    Rails.application.stubs(:importmap).returns(nil)
+
+    assert_equal [ {}, [], {} ], [ RailsJsdom.modules, RailsJsdom.remote_modules, RailsJsdom.directories ]
   end
 
   test ".modules resolves local importmap pins to their asset files" do

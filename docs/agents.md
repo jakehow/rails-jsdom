@@ -4,7 +4,7 @@ This page is for an AI coding agent working in a Rails app that uses, or is movi
 
 ## What rails-jsdom is
 
-- Interaction tests for Rails apps that use importmap, Turbo and Stimulus, without a browser or a test server.
+- Interaction tests for Rails apps that use Turbo and Stimulus, with importmap or a JavaScript bundler, without a browser or a test server.
 - Rails renders the real pages. The real Stimulus controllers and Turbo run in jsdom, in one Node process per test worker.
 - Every request the page makes (`fetch`, `XMLHttpRequest`, Turbo Drive visits, form submissions) is answered by Rails inside the test process, in the test's session.
 - The helpers use the system test method names: `visit`, `click_on`, `fill_in`, `within`, `accept_confirm`, `assert_selector`, `find` and so on.
@@ -20,6 +20,29 @@ This page is for an AI coding agent working in a Rails app that uses, or is movi
    - ignores `node_modules`.
 3. Make CI install the Node packages before the tests, with `npm ci` after setting up Node 26 (or 22.22.2+ or 24.15+).
 4. Commit `package.json`, `package-lock.json` and `.npmrc`.
+
+### Apps that bundle JavaScript (esbuild, Bun, Vite, webpack)
+
+If the app has no `config/importmap.rb` and builds its JavaScript with a bundler (`jsbundling-rails`, `vite_rails`, `rails-vite-plugin` or similar), configure rails-jsdom in `test/test_helper.rb` after `require "rails_jsdom"`:
+
+```ruby
+RailsJsdom.entry = "app/javascript/application.js"
+RailsJsdom.register_controllers = false
+RailsJsdom.esbuild_config = "test/rails_jsdom.esbuild.mjs"
+```
+
+- Set `entry` to the module the bundler starts from (the bundler's config names it).
+- Set `register_controllers = false` when that entry registers the Stimulus controllers itself, which it almost always does. Leave it out only if controllers are registered nowhere in the entry.
+- rails-jsdom bundles the entry with esbuild. If the build fails on syntax only the app's bundler understands (`import.meta.glob`, `?raw` or `?url` imports, `require.context`, JSX in `.js` files, aliases, `define`d globals), add `esbuild_config`: a module whose default export takes the esbuild options and returns them with the plugins, loaders and defines needed. Put new plugins before `options.plugins`. The README has a Vite example.
+- A page that throws because jsdom lacks a browser API the app's libraries call (for example the Web Animations API) needs a stub; add it as an esbuild `banner` in the same config.
+
+### Apps that hide elements with CSS classes
+
+rails-jsdom does not apply stylesheets. If the app hides elements with a class or another selector whose CSS always means `display: none` or `visibility: hidden` (a `.hide` utility class, a closed custom-element dialog), list them in `test/test_helper.rb` so assertions treat them as hidden:
+
+```ruby
+RailsJsdom.hidden_selectors = [ ".hide", "wa-dialog:not([open])" ]
+```
 
 ## Write an interaction test
 
@@ -53,6 +76,7 @@ end
 - Requests to other hosts fail like a network error. Answer them with `stub_fetch` after the page loads.
 - Broadcasts made with `broadcast_*_later` arrive when the test performs the jobs, for example `perform_enqueued_jobs { click_on "Post" }`.
 - `using_session(:name) { ... }` runs a block as another user with their own cookies and page.
+- `header "User-Agent", "..."` sends a header with every later request, for tests that system tests ran with a phone's user agent or a header set through `page.driver`.
 
 ## Convert a system test suite
 
@@ -76,7 +100,7 @@ Work through `test/system/` one file at a time.
    - an unexpected dialog: wrap the action in the matching `accept_*` or `dismiss_*`;
    - a request to another host: stub it with `stub_fetch`;
    - a missing browser API: stub it in the test with `execute_script`;
-   - an element found more than once: scope it with `within` or pass `match: :first`.
+   - an element found more than once: scope it with `within` or pass `match: :first`. Actions already skip disabled and hidden matches when one visible, enabled match remains. An action whose every match is hidden fails, except `attach_file` on a hidden file field.
 7. **When `test/system/` is empty,** remove `ApplicationSystemTestCase`, the `capybara` and `selenium-webdriver` gems, and the CI steps that installed a browser.
 
 Interaction tests are faster than system tests, so do not merge tests to save time. Keep one behaviour per test. Group checks of the same result into one test only when they would otherwise repeat the same steps.
@@ -138,4 +162,4 @@ Interaction tests are faster than system tests, so do not merge tests to save ti
 - **No layout or painting.** Computed CSS, geometry, breakpoints, screenshots and drag and drop cannot be tested.
 - **Stubbed browser APIs.** jsdom lacks some browser APIs, so rails-jsdom stubs these: `matchMedia` never matches, `IntersectionObserver` and `ResizeObserver` never report, scrolling does nothing, `checkVisibility` is false for elements that assertions treat as hidden, `MessageChannel` delivers messages on the virtual clock, inserted stylesheet `<link>` elements, and images once their `src` is set, fire `load` without fetching anything, `URL.createObjectURL` returns a `blob:` URL nothing can fetch, `DataTransfer` and `ClipboardEvent` exist so a test can dispatch a paste, and `navigator.clipboard` drops writes. A page that needs another missing API needs a stub in the test.
 - **Remote importmap pins** load as empty modules. Vendor a pin with `bin/importmap pin --download` to test it.
-- **Requirements:** Ruby 3.3, 3.4 or 4.0, and Rails 8.1 with importmap, Propshaft, Turbo and Stimulus. Stimulus controllers must live under `app/javascript/controllers`.
+- **Requirements:** Ruby 3.3, 3.4 or 4.0, and Rails 8.1 with Turbo and Stimulus, and importmap with Propshaft or a JavaScript bundler. With importmap, Stimulus controllers must live under `app/javascript/controllers`.
